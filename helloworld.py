@@ -22,7 +22,7 @@ game_scene = PyDark.engine.Scene(surface=game, name="game_scene")
 
 login_overlay = PyDark.ui.Overlay(
     parent=login_scene,
-    size=(login_scene.window_size()[0], 260),
+    size=(login_scene.window_size()[0], 320),
     color=PyDark.engine.Color(0, 255, 0, 0),
     endcolor=PyDark.engine.Color(0, 160, 0, 0),
     position=(0,0)
@@ -81,6 +81,7 @@ login_button = PyDark.ui.Button(
     center=True,
     sound="click.wav",
     default_image="button.png",
+    image_hover="button_hover.png",
     image_selected="button_hover.png"
 )
 

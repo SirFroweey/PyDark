@@ -178,6 +178,7 @@ class Button(BaseSprite):
         # set default global variable values
         if default_image:
             self.default_image = pygame.image.load(default_image).convert_alpha()
+                
         if image_hover:
             self.image_hover = pygame.image.load(image_hover).convert_alpha()
         if image_selected:
@@ -204,11 +205,11 @@ class Button(BaseSprite):
         self.rect.topleft = self.position
         self.set_text()
     def change_image(self, image):
-        # Every half-a-second w check to see the state of the image.
+        # Check to see the state of the image.
         # Wether its focused, being hovered by the mouse, etc.
         if image:
             comparison = self.last_image_change_timestamp  - datetime.datetime.now()
-            if abs(comparison.total_seconds()) > 0.5:
+            if abs(comparison.total_seconds()) > 0.1:
                 self._button = image
                 self.last_image_change_timestamp  = datetime.datetime.now()
     def set_text(self, new_text=None):
