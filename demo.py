@@ -7,6 +7,13 @@ __author__ = "David Almendarez"
 __website__ = "www.findadownload.net"
 
 
+#######################################################
+# NOTE: This is not a part of PyDark.
+# This file simply teaches you how to create UI elements outside of PyDark /
+# in native PyGame.
+#######################################################
+
+
 #############################
 # TextInput Sprite example. #
 #############################
