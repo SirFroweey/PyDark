@@ -1,9 +1,12 @@
+import pygnetic
+import logging
 import threading
 import base64
 import pygame
 import time
 import icon
 import sys
+import net
 import os
 import ui
 #
@@ -11,7 +14,54 @@ from pygame.locals import *
 
 
 screen_hwnd = None
-    
+
+
+##########################################
+# Resources: Twisted, pygnetic and tiled #
+##########################################
+# http://usingpython.com/pygame-tilemaps/
+# http://bazaar.launchpad.net/~game-hackers/game/trunk/view/head:/gam3/network.py
+# http://pygnetic.readthedocs.org/en/latest/api/index.html#module-pygnetic.client
+
+
+class Player(object):
+    """PyDark network player."""
+    def __init__(self, PlayerInstance=None, name=None, hp=100):
+        self.name = name
+        self.net = PlayerInstance
+        self.hp = hp
+        self.x = 0
+        self.y = 0
+    def __repr__(self):
+        if self.net is not None:
+            return "Player: <%s>" %self.net.transport.getPeer()
+        else:
+            return ":Player: <%s>" %self.name
+
+
+class Block(object):
+    """Terrain object that can optionally be created, moved, or destroyed."""
+    def __init__(self, name, image, size):
+        self.name = name
+        self.img = img
+
+
+class World(object):
+    """World that holds all other objects. Size of world is determined /
+       by size[0] * size[1] worth of Land() instances."""
+    def __init__(self, name="World 1", size=(30, 30)):
+        self.name = name
+        self.width = size[0]
+        self.height = size[1]
+
+
+class Camera(object):
+    """Object that controlls which Block() instances should be displayed /
+       along with all other objects, including Player() instances."""
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        
 
 def Color(r, g, b, a):
     return pygame.Color(r, g, b, a)
@@ -151,7 +201,8 @@ class Scene(object):
 
 class Game(object):
     def __init__(self, title, window_size, icon=None,
-                 center_window=True, FPS=30):
+                 center_window=True, FPS=30, online=False,
+                 server_ip=None, server_port=None):
         self.clock = pygame.time.Clock()
         self.FPS = FPS
         self.elapsed = 0
@@ -172,8 +223,21 @@ class Game(object):
         # wether or not we should center of our games window
         if center_window is True:
             ui.center_window()
+        # if game uses online features
+        self.server_ip = server_ip
+        self.server_port = server_port
+        if online:
+            if server_ip and server_port:
+                self.create_online_connection()
+            else:
+                raise ValueError, "You must pass server_ip and server_port to your Game() instance"
         # start pygame display
         self.initialize()
+    def create_online_connection(self):
+        pygnetic.init(events=True, logging_lvl=None)
+        self.chat_msg = pygnetic.register('chat_msg', ('msg', 'msg_id'))
+        self.client = pygnetic.Client()
+        self.connection = self.client.connect(self.server_ip, self.server_port)
     def initialize(self):
         pygame.init()
         pygame.mixer.init()
