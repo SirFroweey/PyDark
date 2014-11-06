@@ -8,13 +8,17 @@ def login_button_pressed(event):
     game.currentScene = "game_scene"
     print event, event.fired_by
     print username.text
+    print password.text
     
 
 game = PyDark.engine.Game(
     title="FrowCraft",
     window_size=(800, 650),
     center_window=True,
-    FPS=30
+    FPS=30,
+    online=True,
+    server_ip="localhost",
+    server_port=8000
 )
 
 login_scene = PyDark.engine.Scene(surface=game, name="login_scene")
@@ -22,7 +26,7 @@ game_scene = PyDark.engine.Scene(surface=game, name="game_scene")
 
 login_overlay = PyDark.ui.Overlay(
     parent=login_scene,
-    size=(login_scene.window_size()[0], 320),
+    size=(login_scene.window_size()[0], 330),
     color=PyDark.engine.Color(0, 255, 0, 0),
     endcolor=PyDark.engine.Color(0, 160, 0, 0),
     position=(0,0)
@@ -62,13 +66,13 @@ password_label = PyDark.ui.Label(
     size=14,
     font="Arial",
     color=PyDark.engine.Color(0, 0, 0, 1),
-    position=(0, 130),
+    position=(0, 150),
     center=True
 )
 
 password = PyDark.ui.TextBox(
     name="password",
-    position=(0, 150),
+    position=(0, 170),
     center=True,
     default_image="input.png",
     image_selected="input_selected.png"
@@ -76,7 +80,7 @@ password = PyDark.ui.TextBox(
 
 login_button = PyDark.ui.Button(
     name="login_button",
-    position=(100, 210),
+    position=(100, 260),
     on_press=login_button_pressed,
     center=True,
     sound="click.wav",
@@ -88,6 +92,8 @@ login_button = PyDark.ui.Button(
 login_overlay.add_object(login_header)
 login_overlay.add_object(username_label)
 login_overlay.add_object(username)
+login_overlay.add_object(password_label)
+login_overlay.add_object(password)
 login_overlay.add_object(login_button)
 
 login_scene.add_object(login_overlay)
