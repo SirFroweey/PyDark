@@ -6,6 +6,16 @@ import time
 import os
 
 
+def connection_status(screen, position, status=None):
+    if status is None:
+            color = 0xff0000
+    elif status:
+        color = 0x00ff00
+    else:
+        color = 0xffff00
+    screen.fill(color, (5 + position[0], position[1], 15, 15))
+
+
 def Color(r, g, b, a):
     return pygame.Color(r, g, b, a)
 
@@ -317,21 +327,26 @@ class Overlay(object):
     frame = Overlay(parent=self, size=(300, 250))
     frame.Load(Button(name="button1", text="Submit", position=(0,0), on_press=self.on_press))
     """
-    def __init__(self, parent, size, color, endcolor=None, position=(0,0)):
+    def __init__(self, parent, size, color=None, endcolor=None, image=None, position=(0,0)):
         self.position = position
         self.drawables = dict()
         self.parent = parent
-        self.panel = pygame.Surface(size).convert()
-        self.panel.fill(color)
-        if color and endcolor:
-            fill_gradient(self.panel, color, endcolor)
+        self.image = image
+        if image:
+            self.panel = pygame.image.load(image).convert_alpha()
+        else:
+            self.panel = pygame.Surface(size).convert()
+            self.panel.fill(color)
+            if color and endcolor:
+                fill_gradient(self.panel, color, endcolor)
         self.size = size
         self.color = color
         self.endcolor = endcolor
     def redraw_surface(self):
-        self.panel.fill(self.color)
-        if self.color and self.endcolor:
-            fill_gradient(self.panel, self.color, self.endcolor)        
+        if not self.image:
+            self.panel.fill(self.color)
+            if self.color and self.endcolor:
+                fill_gradient(self.panel, self.color, self.endcolor)        
     def add_object(self, element):
         self.drawables[element.name] = element
     def remove_object(self, element):

@@ -27,18 +27,19 @@ game_scene = PyDark.engine.Scene(surface=game, name="game_scene")
 login_overlay = PyDark.ui.Overlay(
     parent=login_scene,
     size=(login_scene.window_size()[0], 330),
-    color=PyDark.engine.Color(0, 255, 0, 0),
-    endcolor=PyDark.engine.Color(0, 160, 0, 0),
-    position=(0,0)
+    image="login_overlay_bg.jpg",
+    position=(0,0),
 )
+
 
 login_header = PyDark.ui.Label(
     name="login_header",
     text="FrowCraft",
     size=30,
     font="Arial",
-    color=PyDark.engine.Color(0, 0, 0, 1),
+    color=PyDark.engine.Color(255, 255, 255, 1),
     position=(100, 10),
+    aa=True,
     center=True
 )
 

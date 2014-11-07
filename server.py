@@ -1,26 +1,26 @@
 import PyDark.net
 
 
-# FrowCraft server instance.
-
 SERVER_PORT = 8000
 SERVER_NAME = "FrowServer West #1"
+MAX_CLIENTS = 1000
 
 
-class FrowProtocol(PyDark.net.BaseServerProtocol):
-    def __init__(self):
-        PyDark.net.BaseServerProtocol.__init__(self)
+class OurProtocol(PyDark.net.ServerProtocol):
+    def __init__(self, factory):
+        PyDark.net.ServerProtocol.__init__(self, factory)
+        self.register_handle("msg", "self.chat_message(payload)")
+    def chat_message(self, payload):
+        print "Payload:", payload
+
         
-
-class FrowServer(PyDark.net.Server):
-    def __init__(self):
-        PyDark.net.Server.__init__(self, SERVER_NAME, SERVER_PORT)
-
-
-if __name__ == "__main__":
-    server = FrowServer()
-    server.build_protocol(FrowProtocol)
-    print "\nServer started on {0}:{1}\n".format(server.ip, server.port)
-    server.start()
+Server = PyDark.net.TCP_Server(
+    name=SERVER_NAME,
+    port=SERVER_PORT,
+    log2file=False,
+    max_clients=MAX_CLIENTS,
+    protocol=OurProtocol
+)
 
 
+Server.start()

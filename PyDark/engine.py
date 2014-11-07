@@ -1,8 +1,8 @@
-import pygnetic
 import logging
 import threading
 import base64
 import pygame
+import Queue
 import time
 import icon
 import sys
@@ -11,6 +11,7 @@ import os
 import ui
 #
 from pygame.locals import *
+from lxml import etree
 
 
 screen_hwnd = None
@@ -24,14 +25,27 @@ screen_hwnd = None
 # http://pygnetic.readthedocs.org/en/latest/api/index.html#module-pygnetic.client
 
 
+class DataQueue(object):
+    """
+    A DataQueue can be used to share data between DarkThreads and your game.
+    """
+    def __init__(self, max_items=100):
+        self.max_items = max_items
+        self.q = Queue.Queue(self.max_items)
+    def add(self, data):
+        self.q.put(data)
+    def remove(self, data):
+        pass
+    def exists(self, key):
+        pass
+
+
 class Player(object):
     """PyDark network player."""
-    def __init__(self, PlayerInstance=None, name=None, hp=100):
+    def __init__(self, network=None, name=None, **kwargs):
+        self.kwargs = kwargs
         self.name = name
-        self.net = PlayerInstance
-        self.hp = hp
-        self.x = 0
-        self.y = 0
+        self.net = network
     def __repr__(self):
         if self.net is not None:
             return "Player: <%s>" %self.net.transport.getPeer()
@@ -61,6 +75,18 @@ class Camera(object):
     def __init__(self, x, y):
         self.x = x
         self.y = y
+
+
+class Map(object):
+    """Map loader. Required .xml extension"""
+    def __init__(self, fileName):
+        self.file = file(fileName, "r")
+        self.xml = self.file.read()
+        self.file.close()
+    def load(self):
+        self.xml = etree.fromstring(self.xml)
+    def render(self):
+        return self.xml
         
 
 def Color(r, g, b, a):
@@ -224,8 +250,10 @@ class Game(object):
         if center_window is True:
             ui.center_window()
         # if game uses online features
+        self.online = online
         self.server_ip = server_ip
         self.server_port = server_port
+        self.connection = None
         if online:
             if server_ip and server_port:
                 self.create_online_connection()
@@ -234,10 +262,11 @@ class Game(object):
         # start pygame display
         self.initialize()
     def create_online_connection(self):
-        pygnetic.init(events=True, logging_lvl=None)
-        self.chat_msg = pygnetic.register('chat_msg', ('msg', 'msg_id'))
-        self.client = pygnetic.Client()
-        self.connection = self.client.connect(self.server_ip, self.server_port)
+        try:
+            self.connection = self.client.connect(self.server_ip, self.server_port)
+        except:
+            # could not connect to server
+            self.connection = None
     def initialize(self):
         pygame.init()
         pygame.mixer.init()
@@ -267,6 +296,19 @@ class Game(object):
     def processEvent(self, event):
         if event.type == pygame.QUIT:
             self.running = False
+
+        if self.connection:
+            # Handling network messages
+            if event.type == pygnetic.event.NETWORK and event.connection == self.connection:
+                if event.net_type == pygnetic.event.NET_CONNECTED:
+                    print "Connected"
+                elif event.net_type == pygnetic.event.NET_DISCONNECTED:
+                    print "Disconnected"
+                elif event.net_type == pygnetic.event.NET_RECEIVED:
+                    if event.msg_type == self.chat_msg:
+                        msg = event.message.msg
+                        print msg
+            
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self.update_scene_objects(clickEvent=True)
         elif event.type == pygame.MOUSEMOTION:
