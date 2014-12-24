@@ -63,11 +63,14 @@ class ClientProtocol(LineReceiver):
     Base Client protocol.
     Sub-class this to create your protocol.
     """
+
+    end = "QUIT:NOW"
     
-    def __init__(self, factory):
+    def __init__(self, factory, log):
         self.factory = factory
         self.headers = {}
         self.iterables = []
+        self.log = log
 
     def get_hash(self):
         value = 0
@@ -92,12 +95,21 @@ class ClientProtocol(LineReceiver):
         """
         self.headers[headerName] = func_as_string
 
+    def connectionMade(self):
+        print "Connected"
+        self.sendLine("MSG:Test")
+
+    def lineReceived(self, line):
+        print "Received:", line
+
 
 class ServerProtocol(LineReceiver):
     """
     Base Server protocol.
     Sub-class this to create your protocol.
     """
+    
+    end = "QUIT:NOW"
 
     def __init__(self, factory):
         self.factory = factory
@@ -194,6 +206,7 @@ class ServerProtocol(LineReceiver):
             header, payload = line.split(":")
         except:
             header = None
+            self.transport.loseConnection()
 
         # ensure we have a handle to this header.
         if header is not None:
@@ -221,6 +234,26 @@ class PyDarkFactory(protocol.Factory):
         return self.protocol(self)
 
 
+class PyDarkClientFactory(ClientFactory):
+
+    def __init__(self, protocol, log):
+        self.activeConnections = 0
+        self.protocol = protocol
+        self.clients = {} # hash table. quick look ups.
+        self.log = log
+
+    def buildProtocol(self):
+        return self.protocol(self, log)
+
+    def clientConnectionFailed(self, connector, reason):
+        log.msg('connection failed: ' + reason.getErrorMessage())
+        reactor.stop()
+
+    def clientConnectionLost(self, connector, reason):
+        log.msg('connection lost: ' + reason.getErrorMessage())
+        reactor.stop()    
+
+
 class TCP_Server(object):
     def __init__(self, name="", port=9020, log2file=True, max_clients=100,
                  protocol=ServerProtocol):
@@ -242,12 +275,16 @@ class TCP_Server(object):
 
 
 class TCP_Client(object):
-    def __init__(self, ip, port, protocol=ClientProtocol):
+    def __init__(self, ip, port, protocol=ClientProtocol, log_or_not=False):
+        if log_or_not:
+            log.startLogging(sys.stdout)
         self.protocol = protocol
         self.port = port
         self.ip = ip
+        self.factory = PyDarkClientFactory(protocol, log_or_not)
     def connect(self):
-        pass
+        reactor.connectTCP(self.ip, self.port, self.factory)
+        reactor.run()
 
 
 

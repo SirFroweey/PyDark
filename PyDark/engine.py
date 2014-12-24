@@ -9,9 +9,11 @@ import sys
 import net
 import os
 import ui
-#
+# pygame
 from pygame.locals import *
-from lxml import etree
+# xml processing
+from xml import sax
+
 
 
 screen_hwnd = None
@@ -41,16 +43,24 @@ class DataQueue(object):
 
 
 class Player(object):
-    """PyDark network player."""
+    """PyDark network and/or local player."""
     def __init__(self, network=None, name=None, **kwargs):
         self.kwargs = kwargs
         self.name = name
         self.net = network
+        self.sprite = None
+        self.controllable = False # Let's PyDark Game() instance know \
+        # if we can control this player. Server also verifies this if \
+        # this is a network(multiplayer) game.
+    def SetSprite(self, sprite_instance):
+        self.sprite = sprite_instance
+    def SetControl(self, boolean):
+        self.controllable = boolean
     def __repr__(self):
         if self.net is not None:
             return "Player: <%s>" %self.net.transport.getPeer()
         else:
-            return ":Player: <%s>" %self.name
+            return "Player: <%s>" %self.name
 
 
 class Block(object):
@@ -77,16 +87,98 @@ class Camera(object):
         self.y = y
 
 
+class TileSet(object):
+    def __init__(self, file, tile_width, tile_height):
+        image = pygame.image.load(file).convert_alpha()
+        if not image:
+            print "Error creating new TileSet: file %s not found" % file
+        self.tile_width = tile_width
+        self.tile_height = tile_height
+        self.tiles = []
+        for line in xrange(image.get_height()/self.tile_height):
+            for column in xrange(image.get_width()/self.tile_width):
+                pos = Rect(
+                        column*self.tile_width,
+                        line*self.tile_height,
+                        self.tile_width,
+                        self.tile_height )
+                self.tiles.append(image.subsurface(pos))
+ 
+    def get_tile(self, gid):
+        return self.tiles[gid]
+
+
+class TMXHandler(sax.ContentHandler):
+    def __init__(self):
+        self.width = 0
+        self.height = 0
+        self.tile_width = 0
+        self.tile_height = 0
+        self.columns = 0
+        self.lines  = 0
+        self.properties = {}
+        self.image = None
+        self.tileset = None
+ 
+    def startElement(self, name, attrs):
+        # get most general map informations and create a surface
+        if name == 'map':
+            self.columns = int(attrs.get('width', None))
+            self.lines  = int(attrs.get('height', None))
+            self.tile_width = int(attrs.get('tilewidth', None))
+            self.tile_height = int(attrs.get('tileheight', None))
+            self.width = self.columns * self.tile_width
+            self.height = self.lines * self.tile_height
+            self.image = pygame.Surface([self.width, self.height]).convert()
+        # create a tileset
+        elif name=="image":
+            source = attrs.get('source', None)
+            self.tileset = TileSet(source, self.tile_width, self.tile_height)
+        # store additional properties.
+        elif name == 'property':
+            self.properties[attrs.get('name', None)] = attrs.get('value', None)
+        # starting counting
+        elif name == 'layer':
+            self.line = 0
+            self.column = 0
+        # get information of each tile and put on the surface using the tileset
+        elif name == 'tile':
+            gid = int(attrs.get('gid', None)) - 1
+            if gid <0: gid = 0
+            tile = self.tileset.get_tile(gid)
+            pos = (self.column*self.tile_width, self.line*self.tile_height)
+            self.image.blit(tile, pos)
+ 
+            self.column += 1
+            if(self.column>=self.columns):
+                self.column = 0
+                self.line += 1
+ 
+    # just for debugging
+    def endDocument(self):
+        pass
+        #print self.width, self.height, self.tile_width, self.tile_height
+        #print self.properties
+        #print self.image
+
+
 class Map(object):
-    """Map loader. Required .xml extension"""
-    def __init__(self, fileName):
-        self.file = file(fileName, "r")
-        self.xml = self.file.read()
-        self.file.close()
+    """
+    PyDark map instance. Load's a Tiled(.tmx) map into memory and \
+    returns a pygame.Surface object.
+    """
+    def __init__(self, fileName, position=(0,0)):
+        self.parser = sax.make_parser()
+        self.tmxhandler = TMXHandler()
+        self.filename = fileName
+        self.position = position
     def load(self):
-        self.xml = etree.fromstring(self.xml)
-    def render(self):
-        return self.xml
+        self.parser.setContentHandler(self.tmxhandler)
+        self.parser.parse(self.filename)
+    def Update(self):
+        pass
+    def Draw(self):
+        pass
         
 
 def Color(r, g, b, a):
@@ -118,6 +210,41 @@ def seticon(iconname):
     pygame.display.set_icon(pygame.image.load(iconname))
 
 
+class DarkSprite(pygame.sprite.Sprite):
+    def __init__(self, name, starting_position=None, sprite_list=None,
+                 sprite_sheet=None):
+        """Base PyDark 2D sprite. Takes 3 arguments: (name, starting_position, sprite_list)"""
+        pygame.sprite.Sprite.__init__(self)
+        self.name = name
+        self.index = 0
+        self.subsprites = None
+        if sprite_list:
+            self.subsprites = sprite_list
+        elif sprite_sheet:
+            self.subsprites = sprite_sheet
+        self.starting_position = starting_position
+    def Draw(self, surface=None):
+        if surface:
+            surface.blit(self.image, self.rect)
+        else:
+            self.surface.blit(self.image, self.rect)
+    def LoadContent(self, filename, alpha=True):
+        if alpha:
+            self.image = pygame.image.load(filename).convert_alpha()
+        else:
+            self.image = pygame.image.load(filename).convert()
+        self.rect = self.image.get_rect()
+    def Update(self):
+        pass
+    def Collision(self, other):
+        pass
+    def SetPosition(self, position=None):
+        if position:
+            self.rect.topleft = position
+        else:
+            self.rect.topleft = self.starting_position
+
+
 class BaseSprite(pygame.sprite.Sprite):
     def __init__(self, name, text=None, position=(0, 0), image_sprites=None):
         pygame.sprite.Sprite.__init__(self)
@@ -133,7 +260,6 @@ class BaseSprite(pygame.sprite.Sprite):
             self.setText()
 
     def initFont(self):
-        pygame.font.init()
         self.font = pygame.font.Font(None,3)
 
     def initImage(self):
@@ -191,29 +317,52 @@ class Scene(object):
         self.display = True
         # list of objects to draw onto our Scene()
         self.objects = []
+        # list of players(network or local) to drawn onto our Scene()
+        self.players = []
         # handle to our pygame surface(can be window or overlay)
         self.surface = surface
         #
         self.name = name
+        #
+        self.map = None
     def window_size(self):
         return self.surface.screen.get_size()
     def add_object(self, obj):
         self.objects.append(obj)
+    def add_player(self, player_instance):
+        self.players.append(player_instance)
     def remove_object(self, obj):
         self.objects.remove(obj)
     def Draw(self, item=None):
         """Draw all self.objects onto our Scene() view."""
         if item is None:
             for item in self.objects:
-                pos = item.position
-                #self.Update(item)
-                item.Draw()
-                self.surface.screen.blit(item.panel, pos)
+                # Handle drawing our map
+                if isinstance(item, Map):
+                    pos = item.position
+                    self.surface.screen.blit(item.tmxhandler.image, pos)
+                # Handle drawing sprites
+                elif isinstance(item, DarkSprite):
+                    pass
+                # Handle drawing UI overlay
+                elif isinstance(item, ui.Overlay):
+                    pos = item.position
+                    #self.Update(item)
+                    item.Draw()
+                    self.surface.screen.blit(item.panel, pos)
         else:
-            #self.Update(item)
-            item.Draw()
-            pos = item.position
-            self.surface.screen.blit(item.panel, pos)
+            # Handle drawing our Map
+            if isinstance(item, Map):
+                pos = item.position
+                self.surface.screen.blit(item.tmxhandler.image, pos)
+            # Handle drawing sprites
+            elif isinstance(item, DarkSprite):
+                pass
+            # Handle drawing UI Overlay
+            elif isinstance(item, ui.Overlay):
+                item.Draw()
+                pos = item.position
+                self.surface.screen.blit(item.panel, pos)
     def Update(self, item=None):
         """Update all our self.objects on our Scene() view."""
         if item is None:
@@ -221,6 +370,9 @@ class Scene(object):
                 item.Update()
         else:
             item.Update()
+    def LoadMap(self, map_instance):
+        self.map = map_instance
+        print "Set self.map:", self.map
     def __repr__(self):
         return "<PyDark.engine.Scene: {0}>".format(self.name)
             
@@ -270,6 +422,7 @@ class Game(object):
     def initialize(self):
         pygame.init()
         pygame.mixer.init()
+        pygame.font.init()
         # set icon(if supplied)
         if self.icon is not None:
             seticon(self.icon)
@@ -390,11 +543,16 @@ class Game(object):
 
 class SpriteSheet(object):
     def __init__(self, filename):
-        try:
-            self.sheet = pygame.image.load(filename).convert()
-        except pygame.error, message:
-            print 'Unable to load spritesheet image:', filename
-            raise SystemExit, message
+        #try:
+        #    filename = filename.replace("/", "\\")
+        #    filename = os.path.join(os.getcwd(), filename)
+        self.sheet = pygame.image.load(filename).convert()
+        self.width = self.sheet.get_size()[0]
+        self.height = self.sheet.get_size()[1]
+        self.filename = filename
+        #except pygame.error, message:
+        #    print 'Unable to load spritesheet image:', filename
+        #    raise SystemExit, message
     # Load a specific image from a specific rectangle
     def image_at(self, rectangle, colorkey = None):
         "Loads image from x,y,x+offset,y+offset"
@@ -416,6 +574,12 @@ class SpriteSheet(object):
         tups = [(rect[0]+rect[2]*x, rect[1], rect[2], rect[3])
                 for x in range(image_count)]
         return self.images_at(tups, colorkey)
+    def __repr__(self):
+        return "<PyDark.engine.SpriteSheet({0} x {1}): {2}>".format(
+            self.width,
+            self.height,
+            self.filename,
+            )
 
 
     #ss = spritesheet.spriteshee('somespritesheet.png')
