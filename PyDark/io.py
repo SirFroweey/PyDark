@@ -8,6 +8,21 @@ import struct
 import os
 
 
+def GetFolder(name):
+    """Returns absolute location on DISK DRIVE, if the specified folder exists."""
+    current_dir = os.getcwd()
+    if os.path.exists(os.path.join(current_dir, name)):
+        return os.path.join(current_dir, name)
+    raise IOError, "Could not find folder: {0}".format(os.path.join(current_dir, name))
+
+
+def GetFile(path, name):
+    """Returns absolute location on DISK DRIVE, if the specified file exists."""
+    if os.path.exists(os.path.join(path, name)):
+        return os.path.join(path, name)
+    raise IOError, "Could not load: {0}".format(os.path.join(path, name))
+
+
 def xor_encrypt(string, key):
     """Encrypt a string using XOR encryption. Takes two parameters: (string, key(integer))"""
     chars = []

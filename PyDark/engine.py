@@ -1,5 +1,6 @@
 import logging
 import threading
+import vector2d
 import base64
 import pygame
 import Queue
@@ -15,12 +16,19 @@ from pygame.locals import *
 from xml import sax
 
 
+# Left off: Need to keep track of which keys are being pressed down and store them as boolean values \
+# so I can determine when the client has released those keys. This way client players can move by holding \
+# left, right, up or down.
+
+# Left off: Finish Player() class.
+# Created RegisterKeyPress() and RegisterMousePress() functions to specify function callbacks when given keys are pressed.
+
 
 screen_hwnd = None
 
 
 ##########################################
-# Resources: Twisted, pygnetic and tiled #
+# Resources: PyGame, Twisted and Tiled #
 ##########################################
 # http://usingpython.com/pygame-tilemaps/
 # http://bazaar.launchpad.net/~game-hackers/game/trunk/view/head:/gam3/network.py
@@ -43,19 +51,72 @@ class DataQueue(object):
 
 
 class Player(object):
-    """PyDark network and/or local player."""
-    def __init__(self, network=None, name=None, **kwargs):
+    """PyDark network and/or local player instance."""
+    def __init__(self, network=None, name=None, xspeed=1, yspeed=1, **kwargs):
         self.kwargs = kwargs
+        self.xspeed = xspeed # player x-coordinate speed(in pixels)
+        self.yspeed = yspeed # player y-coordinate speed(in pixels)
         self.name = name
         self.net = network
+        self.key_pressed_dict = {} # dictionary containing keyboard_character, function_handle pairs.
+        self.key_held_dict = {} # dictionary containing keyboard_character, function_handle pairs.
+        self.mouse_dict = {} # dictionary containing mouse_button, function_handle pairs.
         self.sprite = None
         self.controllable = False # Let's PyDark Game() instance know \
         # if we can control this player. Server also verifies this if \
         # this is a network(multiplayer) game.
+    def RegisterKeyPress(self, key, function):
+        """Register a function callback for the given keyboard key."""
+        self.key_pressed_dict[key] = function
+    def RegisterKeyHeld(self, key, function):
+        """Register a function callback for the given keyboard key (when held down)."""
+        self.key_held_dict[key] = function
+    def RegisterMousePress(self, button, function):
+        """Register a function callback for the given mouse button when pressed."""
+        self.mouse_dict[button] = function
     def SetSprite(self, sprite_instance):
+        """Set the Players PyDark Sprite instance."""
         self.sprite = sprite_instance
     def SetControl(self, boolean):
+        """Let's PyDark know if this Player can be controlled by the client."""
         self.controllable = boolean
+    def SetSurface(self, surface):
+        """Set's the players sprite parent surface. Defines where the player sprite should be drawn onto."""
+        self.sprite.surface = surface
+    def SetPosition(self, position):
+        """Set's the players sprite position."""
+        return self.sprite.SetPosition(position)
+    def GetSprite(self):
+        """Returns a handle to the DarkSprite instance."""
+        return self.sprite
+    def GetCurrentImage(self):
+        """Returns the current image that is being displayed for the player sprite."""
+        return self.sprite.current_image
+    def GetPosition(self):
+        """Returns the players sprite position(x, y) coordinate as a Vector2d instance."""
+        return vector2d.Vec2d(self.sprite.rect.topleft)
+    def Collision(self, other=None):
+        """Checks if the player object collides with another object."""
+        pass
+    def Update(self, clickEvent=None, hoverEvent=None, keyEvent=None, keyHeldEvent=None,
+               keyChar=None, pos=None):
+        """Player movement, actions, connection-state, etc are handled here."""
+        if self.sprite is not None:
+            if clickEvent:
+                pass
+            if hoverEvent:
+                pass
+            if keyEvent:
+                keyChar = pygame.key.name(keyChar)
+                key_handle = self.key_pressed_dict.get(keyChar)
+                if key_handle is not None:
+                    key_handle(keyChar)
+            if keyHeldEvent:
+                keyChar = pygame.key.name(keyChar)
+                key_handle = self.key_held_dict.get(keyChar)
+                if key_handle is not None:
+                    key_handle(keyChar)                
+            self.sprite.Update()
     def __repr__(self):
         if self.net is not None:
             return "Player: <%s>" %self.net.transport.getPeer()
@@ -215,15 +276,19 @@ class DarkSprite(pygame.sprite.Sprite):
                  sprite_sheet=None):
         """Base PyDark 2D sprite. Takes 3 arguments: (name, starting_position, sprite_list)"""
         pygame.sprite.Sprite.__init__(self)
-        self.name = name
-        self.index = 0
+        self.name = name # name of our sprite (for reference)
+        self.index = 0 # Contains the index or counter to our current subsprite image.
         self.subsprites = None
         if sprite_list:
             self.subsprites = sprite_list
         elif sprite_sheet:
             self.subsprites = sprite_sheet
-        self.starting_position = starting_position
-    def Draw(self, surface=None):
+        self.starting_position = starting_position # starting position for sprite on Scene
+        self.surface = None # sprite is drawn onto this surface \
+        self.image = None # a handle to the main image for the sprite.
+        self.current_image = None # a handle to the current subimage for the sprite images.
+        self.rect = None
+    def Draw(self, surface=None): # or this surface if passed as an argument
         if surface:
             surface.blit(self.image, self.rect)
         else:
@@ -233,16 +298,22 @@ class DarkSprite(pygame.sprite.Sprite):
             self.image = pygame.image.load(filename).convert_alpha()
         else:
             self.image = pygame.image.load(filename).convert()
+        self.current_image = self.image
         self.rect = self.image.get_rect()
+        return True
     def Update(self):
         pass
     def Collision(self, other):
         pass
     def SetPosition(self, position=None):
-        if position:
-            self.rect.topleft = position
-        else:
-            self.rect.topleft = self.starting_position
+        """Sets the sprites position(if passed), otherwise, it sets the sprite to the aforementioned starting position."""
+        if self.rect:
+            if position:
+                self.rect.topleft = position
+            else:
+                self.rect.topleft = self.starting_position
+            return True
+        return False
 
 
 class BaseSprite(pygame.sprite.Sprite):
@@ -302,14 +373,6 @@ class DarkThread(threading.Thread):
         self.func(self.params)
     
 
-class Object(object):
-    """A sprite, texture, or any UI element used by our game."""
-    # Objects keeps our data handy, like the position to draw the Object,
-    # and its alive-time(if any).
-    def __init__(self, image):
-        pass
-    
-
 class Scene(object):
     """A scene is a presentation of objects and UI elements."""
     def __init__(self, surface, name):
@@ -330,12 +393,14 @@ class Scene(object):
     def add_object(self, obj):
         self.objects.append(obj)
     def add_player(self, player_instance):
+        player_instance.SetSurface(self.surface)
         self.players.append(player_instance)
     def remove_object(self, obj):
         self.objects.remove(obj)
     def Draw(self, item=None):
         """Draw all self.objects onto our Scene() view."""
         if item is None:
+            # draw our objects onto the Scene
             for item in self.objects:
                 # Handle drawing our map
                 if isinstance(item, Map):
@@ -347,14 +412,20 @@ class Scene(object):
                 # Handle drawing UI overlay
                 elif isinstance(item, ui.Overlay):
                     pos = item.position
-                    #self.Update(item)
                     item.Draw()
                     self.surface.screen.blit(item.panel, pos)
+            # draw our players onto the Scene
+            for PLAYER in self.players:
+                if isinstance(PLAYER, Player):
+                    self.surface.screen.blit(PLAYER.GetCurrentImage(), PLAYER.GetPosition())
         else:
             # Handle drawing our Map
             if isinstance(item, Map):
                 pos = item.position
                 self.surface.screen.blit(item.tmxhandler.image, pos)
+            # Handle drawing players
+            elif isinstance(item, Player):
+                pass
             # Handle drawing sprites
             elif isinstance(item, DarkSprite):
                 pass
@@ -368,11 +439,12 @@ class Scene(object):
         if item is None:
             for item in self.objects:
                 item.Update()
+            for player in self.players:
+                player.Update()
         else:
             item.Update()
     def LoadMap(self, map_instance):
         self.map = map_instance
-        print "Set self.map:", self.map
     def __repr__(self):
         return "<PyDark.engine.Scene: {0}>".format(self.name)
             
@@ -452,26 +524,35 @@ class Game(object):
 
         if self.connection:
             # Handling network messages
-            if event.type == pygnetic.event.NETWORK and event.connection == self.connection:
-                if event.net_type == pygnetic.event.NET_CONNECTED:
-                    print "Connected"
-                elif event.net_type == pygnetic.event.NET_DISCONNECTED:
-                    print "Disconnected"
-                elif event.net_type == pygnetic.event.NET_RECEIVED:
-                    if event.msg_type == self.chat_msg:
-                        msg = event.message.msg
-                        print msg
+            pass
             
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self.update_scene_objects(clickEvent=True)
+            self.update_scene_players(clickEvent=True)
         elif event.type == pygame.MOUSEMOTION:
             self.update_scene_objects(hoverEvent=True)
+            self.update_scene_players(hoverEvent=True)
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.constants.K_BACKSPACE:
                 char = pygame.constants.K_BACKSPACE
             else:
                 char = event.unicode
             self.update_scene_objects(keyEvent=True, keyChar=char)
+            self.update_scene_players(keyEvent=True, keyChar=event.key)
+
+    def update_scene_players(self, clickEvent=False, hoverEvent=False, keyEvent=False,
+                             keyChar=None):
+        """Handles user events for the client and commits updates on controllable Player() instances."""
+        pos = pygame.mouse.get_pos()
+        this_scene = self.get_current_scene()
+        for person in this_scene.players:
+            if person.controllable:
+                if clickEvent:
+                    person.Update(clickEvent=True, pos=pos)
+                if hoverEvent:
+                    person.Update(hoverEvent=True, pos=pos)
+                if keyEvent:
+                    person.Update(keyEvent=True, keyChar=keyChar)
     def update_scene_objects(self, clickEvent=False, hoverEvent=False, keyEvent=False,
                              keyChar=None):
         pos = pygame.mouse.get_pos()
