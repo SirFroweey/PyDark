@@ -2,9 +2,12 @@ from twisted.internet.protocol import ClientFactory
 from twisted.internet import protocol, reactor, endpoints
 #from twisted.application import service, internet
 from twisted.protocols.basic import LineReceiver
+from twisted.internet.task import LoopingCall
 from twisted.internet import task
 from twisted.python import log
 import sys
+#
+import engine
 
 
 __version__ = 1.0
@@ -64,13 +67,14 @@ class ClientProtocol(LineReceiver):
     Sub-class this to create your protocol.
     """
 
-    end = "QUIT:NOW"
+    end = "END:SESSION"
     
     def __init__(self, factory, log):
         self.factory = factory
         self.headers = {}
         self.iterables = []
         self.log = log
+        self.connected = False
 
     def get_hash(self):
         value = 0
@@ -96,11 +100,36 @@ class ClientProtocol(LineReceiver):
         self.headers[headerName] = func_as_string
 
     def connectionMade(self):
-        print "Connected"
-        self.sendLine("MSG:Test")
+        self.connected = True
 
     def lineReceived(self, line):
-        print "Received:", line
+        try:
+            # ensure we get a clean packet
+            line = decode_packet(line)
+            header, payload = line.split(":")
+        except:
+            # if we get a malformed packet, close the connection.
+            ####
+            # We should also store the client ip and port and keep track of how many \
+            # malformed packets we receive from them.
+            ####
+            # That way we can detect patterns and determine if the client is a hacker \
+            # and is attempting to send edited packet data.
+            print "RECEIVED UNRECOGNIZED PACKET:", line
+            header = None
+            self.transport.loseConnection()
+
+        # ensure we have a handle to this header.
+        if header is not None:
+            header = header.lower()
+            command = self.headers.get(header)
+            #log.msg("Got Payload: %s" %payload)
+            if command is not None:
+                # execute handle
+                eval(command)
+
+    def message(self, line):
+        self.sendLine(encode_packet(line))
 
 
 class ServerProtocol(LineReceiver):
@@ -143,7 +172,7 @@ class ServerProtocol(LineReceiver):
         self.headers[headerName] = func_as_string
     
     def connectionMade(self):
-        client = Player(network=self) # create a temporary Player() instance.
+        client = engine.Player(network=self) # create a temporary Player() instance.
         log.msg("Got client connection from %s" % client)
         if len(self.factory.clients) >= self.factory.max_clients:
             log.msg("Too many connections. Kicking %s off server." %client)
@@ -167,7 +196,7 @@ class ServerProtocol(LineReceiver):
         client = self.lookupPlayer(self)#self.transport.getPeer()
         if client is not None:
             # Lost connection due to internet problems, random disconnect, etc
-            log.msg("Lost connection from %s" %client.name)
+            log.msg("Lost connection from %s" %client)
             self.factory.clients.pop(client.net.transport)
         else:
             # Lost connection because we kicked them off due to self.factory.max_clients quota.
@@ -200,24 +229,32 @@ class ServerProtocol(LineReceiver):
             eval(func)
         
     def lineReceived(self, line):
-        
         try:
             # ensure we get a clean packet
+            line = decode_packet(line)
             header, payload = line.split(":")
         except:
+            # if we get a malformed packet, close the connection.
+            ####
+            # We should also store the client ip and port and keep track of how many \
+            # malformed packets we receive from them.
+            ####
+            # That way we can detect patterns and determine if the client is a hacker \
+            # and is attempting to send edited packet data.
             header = None
             self.transport.loseConnection()
 
         # ensure we have a handle to this header.
         if header is not None:
+            header = header.lower()
             command = self.headers.get(header)
-            log.msg("Got Payload: %s" %payload)
+            #log.msg("Got Payload: %s" %payload)
             if command is not None:
                 # execute handle
                 eval(command)
 
     def message(self, line):
-        self.sendLine(line)
+        self.sendLine(encode_packet(line))
 
 
 class PyDarkFactory(protocol.Factory):
@@ -236,14 +273,17 @@ class PyDarkFactory(protocol.Factory):
 
 class PyDarkClientFactory(ClientFactory):
 
-    def __init__(self, protocol, log):
+    def __init__(self, parent, protocol, log):
         self.activeConnections = 0
+        self.parent = parent
         self.protocol = protocol
         self.clients = {} # hash table. quick look ups.
         self.log = log
+        self.handle = None
 
-    def buildProtocol(self):
-        return self.protocol(self, log)
+    def buildProtocol(self, addr):
+        self.handle = self.protocol(self, self.log)
+        return self.handle
 
     def clientConnectionFailed(self, connector, reason):
         log.msg('connection failed: ' + reason.getErrorMessage())
@@ -255,7 +295,7 @@ class PyDarkClientFactory(ClientFactory):
 
 
 class TCP_Server(object):
-    def __init__(self, name="", port=9020, log2file=True, max_clients=100,
+    def __init__(self, name="", ip="127.0.0.1", port=9020, log2file=True, max_clients=100,
                  protocol=ServerProtocol):
         self.name = name
         self.port = port
@@ -265,9 +305,10 @@ class TCP_Server(object):
             log.startLogging(sys.stdout)
         self.protocol = protocol
         self.handler = PyDarkFactory(name, max_clients, protocol)
-        self.s = endpoints.serverFromString(reactor, "tcp:%s" %str(port)).listen(
-            self.handler
-        )
+        #self.s = endpoints.serverFromString(reactor, "tcp:%s:interface=%s" %(str(port), str(ip))).listen(
+        #    self.handler
+        #)
+        reactor.listenTCP(port, self.handler, interface=ip)
     def start(self):
         reactor.run()
     def __repr__(self):
@@ -275,15 +316,21 @@ class TCP_Server(object):
 
 
 class TCP_Client(object):
-    def __init__(self, ip, port, protocol=ClientProtocol, log_or_not=False):
+    def __init__(self, parent, ip, port, protocol=ClientProtocol, log_or_not=False, tick_function=None, FPS=30):
         if log_or_not:
             log.startLogging(sys.stdout)
+        self.parent = parent
         self.protocol = protocol
         self.port = port
         self.ip = ip
-        self.factory = PyDarkClientFactory(protocol, log_or_not)
+        self.factory = PyDarkClientFactory(self, protocol, log_or_not)
+        self.tick_function = tick_function
+        self.handle = None # handle to our client reactor.
+        self.FPS = FPS
     def connect(self):
-        reactor.connectTCP(self.ip, self.port, self.factory)
+        self.handle = reactor.connectTCP(self.ip, self.port, self.factory)
+        tick = LoopingCall(self.tick_function)
+        tick.start(1.0 / self.FPS)
         reactor.run()
 
 

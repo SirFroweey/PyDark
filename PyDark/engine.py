@@ -3,7 +3,9 @@ import threading
 import vector2d
 import base64
 import pygame
+import Image
 import Queue
+import math
 import time
 import icon
 import sys
@@ -25,6 +27,7 @@ from xml import sax
 
 
 screen_hwnd = None
+game_instance = None
 
 
 ##########################################
@@ -33,6 +36,28 @@ screen_hwnd = None
 # http://usingpython.com/pygame-tilemaps/
 # http://bazaar.launchpad.net/~game-hackers/game/trunk/view/head:/gam3/network.py
 # http://pygnetic.readthedocs.org/en/latest/api/index.html#module-pygnetic.client
+
+
+def pygame_to_pil_img(pg_surface):
+    imgstr = pygame.image.tostring(pg_surface, 'RGB')
+    return Image.fromstring('RGB', pg_surface.get_size(), imgstr)
+
+
+def font(name, size):
+    return pygame.font.SysFont(name, size)
+
+
+def Hexagon(Radius, SCREENX, SCREENY, Side=0):
+    # Moar Crazy Math, returns co-ords for a single side of the Hexagon
+    a = int(math.sin(math.radians(30)) * (Radius / math.sin(math.radians(60))))
+    x = SCREENX / 2; y = SCREENY / 2; r = Radius
+    if Side == 0: return [(x + r,y + a), (x + r,y - a), (x,y - 2 * a), (x - r,y - a), (x - r,y + a), (x,y + 2 * a)]
+    if Side == 1: return [(x + r,y + a), (x + r,y - a)]
+    if Side == 2: return [(x + r,y - a), (x,y - 2 * a)]
+    if Side == 3: return [(x,y - 2 * a), (x - r,y - a)]
+    if Side == 4: return [(x - r,y - a), (x - r,y + a)]
+    if Side == 5: return [(x - r,y + a), (x,y + 2 * a)]
+    if Side == 6: return [(x,y + 2 * a), (x + r,y + a)]
 
 
 class DataQueue(object):
@@ -78,7 +103,10 @@ class Player(object):
         """Set the Players PyDark Sprite instance."""
         self.sprite = sprite_instance
     def SetControl(self, boolean):
-        """Let's PyDark know if this Player can be controlled by the client."""
+        """
+        Let's PyDark know if this Player can be controlled by the client.
+        If this is a multiplayer game, the server also verifies that the client can move that player.
+        """
         self.controllable = boolean
     def SetSurface(self, surface):
         """Set's the players sprite parent surface. Defines where the player sprite should be drawn onto."""
@@ -126,9 +154,9 @@ class Player(object):
 
 class Block(object):
     """Terrain object that can optionally be created, moved, or destroyed."""
-    def __init__(self, name, image, size):
+    def __init__(self, name, sprite):
         self.name = name
-        self.img = img
+        self.sprite = sprite
 
 
 class World(object):
@@ -141,11 +169,19 @@ class World(object):
 
 
 class Camera(object):
-    """Object that controlls which Block() instances should be displayed /
+    """Object that controlls which part of the map to render /
        along with all other objects, including Player() instances."""
-    def __init__(self, x, y):
+    def __init__(self, x, y, width=800, height=600):
         self.x = x
         self.y = y
+        self.width = width
+        self.height = height
+    def Render(self, surface):
+        """Renders the currently viewable portion of our surface(background)."""
+        pass
+    def Update(self):
+        """In charge of scrolling and panning functionality for our camera instance."""
+        pass
 
 
 class TileSet(object):
@@ -271,6 +307,19 @@ def seticon(iconname):
     pygame.display.set_icon(pygame.image.load(iconname))
 
 
+def preload(file_list, alpha=True):
+    """Preload a list of files into memory. This function returns a list of pygame objects."""
+    payload = []
+    for entry in file_list:
+        # Load images into memory.
+        if entry.endswith(".png") or entry.endswith(".jpg") or entry.endswith(".gif"):
+            if alpha:
+                payload.append(pygame.image.load(entry).convert_alpha())
+            else:
+                payload.append(pygame.image.load(entry))
+    return payload
+
+
 class DarkSprite(pygame.sprite.Sprite):
     def __init__(self, name, starting_position=None, sprite_list=None,
                  sprite_sheet=None):
@@ -278,32 +327,120 @@ class DarkSprite(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.name = name # name of our sprite (for reference)
         self.index = 0 # Contains the index or counter to our current subsprite image.
-        self.subsprites = None
+        self.subsprites = [] # Subsprites for this DarkSprite instance.
+        self.parent_sprite = None # Parent DarkSprite of this DarkSprite (if any)
+        self.sprite_list = None
         if sprite_list:
-            self.subsprites = sprite_list
+            self.sprite_list = sprite_list
         elif sprite_sheet:
-            self.subsprites = sprite_sheet
+            self.sprite_list = sprite_sheet
         self.starting_position = starting_position # starting position for sprite on Scene
         self.surface = None # sprite is drawn onto this surface \
         self.image = None # a handle to the main image for the sprite.
         self.current_image = None # a handle to the current subimage for the sprite images.
+        self.text_surfaces = {} # dictionary of text surfaces to be drawn ontop of our sprite.
+        self.hide = False # determines if we should display(render/draw) this sprite.
         self.rect = None
-    def Draw(self, surface=None): # or this surface if passed as an argument
+    @staticmethod
+    def CombineRects(first, second):
+        """Combine the X and Y coordinates of two pygame.Rects together. Takes 2 parameters: (first, second). Must be DarkSprite instances."""
+        return pygame.Rect(first.rect.left + second.rect.left,
+                           first.rect.top + second.rect.top,
+                           first.rect.width,
+                           first.rect.height)
+    def Draw(self, surface=None):
         if surface:
             surface.blit(self.image, self.rect)
         else:
             self.surface.blit(self.image, self.rect)
-    def LoadContent(self, filename, alpha=True):
-        if alpha:
-            self.image = pygame.image.load(filename).convert_alpha()
-        else:
-            self.image = pygame.image.load(filename).convert()
-        self.current_image = self.image
-        self.rect = self.image.get_rect()
-        return True
-    def Update(self):
+    def RenderChildren(self):
+        """Draw subsprites onto this sprite."""
+        #for k in self.subsprites:
+            #self.current_image.blit(k.current_image, k.rect.topleft)
         pass
+    def AddChild(self, darkspriteinstance):
+        """Add a subsprite to this sprite."""
+        darkspriteinstance.parent_sprite = self
+        self.subsprites.append(darkspriteinstance)
+    def LoadContent(self, filename=None, alpha=True, preloaded_sprite_list=None):
+        # if user supplied a list of subsprites for animation.
+        if preloaded_sprite_list:
+            self.sprite_list = preloaded_sprite_list    
+            self.image = self.sprite_list[self.index]
+        elif self.sprite_list:
+            self.sprite_list = [pygame.image.load(item).convert_alpha() for item in self.sprite_list]
+            self.image = self.sprite_list[self.index]
+        # otherwise, check if filename was supplied. If so, load that file as an image.
+        else:
+            if filename:
+                if alpha:
+                    self.image = pygame.image.load(filename).convert_alpha()
+                else:
+                    self.image = pygame.image.load(filename).convert()
+        self.current_image = self.image
+        # Ensure that an image was loaded.
+        if not self.current_image:
+            raise ValueError, "You must supply an image!"
+        self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
+        self.rect = self.current_image.get_rect()
+        return True
+    def AddText(self, fontHandle, fontColor, position, text,
+                name="text1", redraw=False, redraw_function=None):
+        textSurface = fontHandle.render(text, True, fontColor)
+        textSurface = (textSurface, position, redraw, redraw_function, fontHandle, fontColor, text)
+        self.text_surfaces[name] = textSurface
+    def CreateBlock(self, width, height, color=(255, 255, 255, 255),
+                    invisible=False):
+        """Create a pygame.Surface object. Creates a block image."""
+        if not invisible:
+            self.image = pygame.Surface([width, height])
+            self.image.fill(color)
+        else:
+            self.image = pygame.Surface([width, height], pygame.SRCALPHA, 32)
+            self.image = self.image.convert_alpha()
+        self.current_image = self.image
+        self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
+        self.rect = self.image.get_rect()
+    def CreateHexagon(self, color=(255, 255, 255, 255), size=[52, 52],
+                      radius=21, x=42, y=42, rotate=27, invisible=False):
+        point_list = Hexagon(radius, x, y, 0)
+        if not invisible:
+            self.image = pygame.Surface(size, pygame.SRCALPHA, 32)
+            pygame.draw.polygon(self.image, color, point_list)
+            self.image = self.image.convert_alpha()
+        else:
+            self.image = pygame.Surface(size, pygame.SRCALPHA, 32)
+            pygame.draw.polygon(self.image, pygame.SRCALPHA, point_list)
+            self.image = self.image.convert_alpha()
+        if rotate != 0:
+            self.image = pygame.transform.rotate(self.image, rotate)
+        self.current_image = self.image
+        self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
+        self.rect = self.image.get_rect()
+    def Update(self):
+        if self.surface is not None:
+            self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
+            self.surface.blit(self.current_image, (0, 0))
+            for k in self.subsprites:
+                self.surface.blit(k.current_image, k.rect.topleft)
+            # draw text onto sprite.
+            for key, value in self.text_surfaces.iteritems():
+                # unpack values from Tuple
+                j, pos, redraw, redraw_function, font_handle, font_color, text = value 
+                # if redraw flag is True, then re-render the font text using the redraw_function.
+                if redraw:
+                    # Call the redraw_function and store its return value as a string.
+                    text = str(redraw_function())
+                    # Call the AddText class-method again to re-render the font surface.
+                    self.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
+                self.surface.blit(j, pos)
     def Collision(self, other):
+        pass
+    def OnClick(self, pos):
+        """Called when user clicks on sprite."""
+        pass
+    def OnHover(self, pos):
+        """Called when user hovers over the sprite."""
         pass
     def SetPosition(self, position=None):
         """Sets the sprites position(if passed), otherwise, it sets the sprite to the aforementioned starting position."""
@@ -369,7 +506,10 @@ class DarkThread(threading.Thread):
         self.func = func
     def run(self):
         if self.runafter:
-            time.sleep(self.runafter)
+            if isinstance(self.runafter, bool):
+                print "waiting"
+            else:
+                time.sleep(self.runafter)
         self.func(self.params)
     
 
@@ -390,8 +530,19 @@ class Scene(object):
         self.map = None
     def window_size(self):
         return self.surface.screen.get_size()
+    def lookup_object(self, obj):
+        """Attempts to find the object(obj) within' our self.objects list. Returns the index if found or None."""
+        for item in self.objects:
+            if item.name == obj.name:
+                return self.objects.index(item)
+        return None
     def add_object(self, obj):
-        self.objects.append(obj)
+        """Adds a object to our scene. If an object with the same name exists, it overwrites the old one."""
+        found = self.lookup_object(obj)
+        if found:
+            self.objects[found] = obj
+        else:
+            self.objects.append(obj)
     def add_player(self, player_instance):
         player_instance.SetSurface(self.surface)
         self.players.append(player_instance)
@@ -408,12 +559,16 @@ class Scene(object):
                     self.surface.screen.blit(item.tmxhandler.image, pos)
                 # Handle drawing sprites
                 elif isinstance(item, DarkSprite):
-                    pass
+                    #self.surface.screen.blit(item.current_image, item.rect)
+                    # if sprites self.hide attribute is False.
+                    if not item.hide:
+                        if item.surface is not None:
+                            self.surface.screen.blit(item.surface, item.rect)
                 # Handle drawing UI overlay
                 elif isinstance(item, ui.Overlay):
                     pos = item.position
                     item.Draw()
-                    self.surface.screen.blit(item.panel, pos)
+                    self.surface.screen.blit(item.surface, pos)
             # draw our players onto the Scene
             for PLAYER in self.players:
                 if isinstance(PLAYER, Player):
@@ -433,7 +588,7 @@ class Scene(object):
             elif isinstance(item, ui.Overlay):
                 item.Draw()
                 pos = item.position
-                self.surface.screen.blit(item.panel, pos)
+                self.surface.screen.blit(item.surface, pos)
     def Update(self, item=None):
         """Update all our self.objects on our Scene() view."""
         if item is None:
@@ -452,10 +607,13 @@ class Scene(object):
 class Game(object):
     def __init__(self, title, window_size, icon=None,
                  center_window=True, FPS=30, online=False,
-                 server_ip=None, server_port=None):
+                 server_ip=None, server_port=None, protocol=None, log_or_not=False):
+        self.debug = False
         self.clock = pygame.time.Clock()
         self.FPS = FPS
         self.elapsed = 0
+        # List of UI elements that we SHOULD ONLY catch events for
+        self.focus_on_ui = []
         # Window title for our Game
         self.title = title
         # Window size for our Game
@@ -473,21 +631,60 @@ class Game(object):
         # wether or not we should center of our games window
         if center_window is True:
             ui.center_window()
+        # let us know if we connected to the server properly(if applicable)
+        self.connected = False
         # if game uses online features
         self.online = online
         self.server_ip = server_ip
         self.server_port = server_port
+        self.protocol = protocol
+        self.log_or_not = log_or_not
         self.connection = None
         if online:
             if server_ip and server_port:
                 self.create_online_connection()
             else:
                 raise ValueError, "You must pass server_ip and server_port to your Game() instance"
+            if not protocol:
+                raise ValueError, "You must pass a PyDark.net.ClientProtocol!"
         # start pygame display
         self.initialize()
+    def delete_object(self, instance):
+        # removes an object completely from the game.
+        found = False
+        if isinstance(instance, ui.BaseSprite):
+            if not found:
+                for item in self.get_current_scene().objects:
+                    if item.name == instance.name:
+                        self.get_current_scene().remove_object(item)
+                        found = True
+                        break
+                    if isinstance(item, ui.Overlay):
+                        for entry in item.drawables.values():
+                            if entry.name == instance.name:
+                                item.remove_object(entry)
+                                found = True
+                                break
+                
+        elif isinstance(instance, DarkSprite):
+            print "DarkSprite:", instasnce
+    def add_ui_focus_element(self, element):
+        self.remove_focused_ui_element(element)
+        self.focus_on_ui.append(element)
+    def remove_focused_ui_element(self, element):
+        if self.focus_on_ui.__contains__(element):
+            self.focus_on_ui.remove(element)
+    def clear_focused_ui_elements(self):
+        self.focus_on_ui = []
+    def disable_debugging(self):
+        self.debug = False
+    def enable_debugging(self):
+        self.debug = True
     def create_online_connection(self):
         try:
-            self.connection = self.client.connect(self.server_ip, self.server_port)
+            self.connection = net.TCP_Client(parent=self, ip=self.server_ip, port=self.server_port,
+                                             protocol=self.protocol, log_or_not=self.log_or_not,
+                                             tick_function=self.tick, FPS=self.FPS)
         except:
             # could not connect to server
             self.connection = None
@@ -507,29 +704,39 @@ class Game(object):
             # set window caption(title)
             pygame.display.set_caption(self.title)
         # handle to our screen buffer
-        global screen_hwnd
-        self.screen = pygame.display.set_mode(self.size, pygame.DOUBLEBUF)
+        global screen_hwnd, game_instance
+        self.screen = pygame.display.set_mode(self.size, pygame.HWSURFACE)
         screen_hwnd = self.screen
+        game_instance = self
         #write_hdd("icon.txt", convert_image_to_string(get_image_file("PyDark/preferences_desktop_gaming.png")) )
     def add_scene(self, _scene):
         self.scenes[_scene.name] = _scene
     def start(self):
         if len(list(self.scenes)) > 0:
-            self.mainloop()
+            if not self.online:
+                self.mainloop()
+            else:
+                # attempt to establish a connection to the games server.
+                if self.connection:
+                    self.connection.connect()
+
+                # if we can't connect to the server, start the mainloop anyways.
+                if not self.connection.factory.handle:
+                    self.mainloop()
         else:
             raise ValueError, "You must supply at least one-scene."
     def processEvent(self, event):
         if event.type == pygame.QUIT:
             self.running = False
-
-        if self.connection:
-            # Handling network messages
-            pass
+            if self.connection:
+                self.connection.handle.disconnect()
             
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self.update_scene_objects(clickEvent=True)
             self.update_scene_players(clickEvent=True)
         elif event.type == pygame.MOUSEMOTION:
+            if self.debug:
+                print "Coordinate:", pygame.mouse.get_pos()
             self.update_scene_objects(hoverEvent=True)
             self.update_scene_players(hoverEvent=True)
         elif event.type == pygame.KEYDOWN:
@@ -569,26 +776,78 @@ class Game(object):
                     keyEvent,
                     keyChar
                 )
+            if isinstance(item, DarkSprite):
+                # This item is a DarkSprite.
+                self.handle_scene_objects(
+                    pos,
+                    item,
+                    clickEvent,
+                    hoverEvent,
+                    keyEvent,
+                    keyChar
+                )
+    def handle_scene_objects(self, pos, item, clickEvent, hoverEvent, keyEvent,
+                             keyChar):
+        if clickEvent:
+            if item.rect.collidepoint(pos):
+                # fire the sprites OnClick() class-method.
+                item.OnClick(pos)
+                
+        if hoverEvent:
+            if item.rect.collidepoint(pos):
+                # fire the sprites OnHover() class-method.
+                item.OnHover(pos)
     def handle_overlay_objects(self, pos, item, clickEvent, hoverEvent, keyEvent,
                                keyChar):
-        for e in item.drawables.keys():
-            obj = item.drawables.get(e)
-            if clickEvent:
-                obj.Update(pos, clickEvent=True)
-            elif hoverEvent:
-                obj.Update(pos, hoverEvent=True)
-            elif keyEvent:
-                # if object is a textbox, check if it is focused.
-                # if so, enter text.
-                if isinstance(obj, ui.TextBox):
-                    if obj.focused:
-                        # if backspace is pressed, delete a character.
-                        if keyChar == pygame.constants.K_BACKSPACE:
-                            obj.text = obj.text[:-1]
-                        else:
-                            # otherwise, populate text entry with new character.
-                            obj.text += keyChar
-                        obj.set_text()
+
+        # patch added on 1/8/2015.
+        # Added list self.focus_on_ui which allows us to only catch events for specific UI elements.
+
+        if len(self.focus_on_ui) > 0:
+            for e in self.focus_on_ui:
+                
+                obj = item.drawables.get(e.name)
+
+                if obj:
+                    if clickEvent:
+                        obj.Update(pos, clickEvent=True)
+                    elif hoverEvent:
+                        obj.Update(pos, hoverEvent=True)
+                    elif keyEvent:
+                        # if object is a textbox, check if it is focused.
+                        # if so, enter text.
+                        if isinstance(obj, ui.TextBox):
+                            if obj.focused:
+                                # if backspace is pressed, delete a character.
+                                if keyChar == pygame.constants.K_BACKSPACE:
+                                    obj.text = obj.text[:-1]
+                                else:
+                                    # otherwise, populate text entry with new character.
+                                    obj.text += keyChar
+                                obj.set_text()
+                    
+        else:
+            for e in item.drawables.keys():
+                
+                obj = item.drawables.get(e)
+
+                if obj:
+                    if clickEvent:
+                        obj.Update(pos, clickEvent=True)
+                    elif hoverEvent:
+                        obj.Update(pos, hoverEvent=True)
+                    elif keyEvent:
+                        # if object is a textbox, check if it is focused.
+                        # if so, enter text.
+                        if isinstance(obj, ui.TextBox):
+                            if obj.focused:
+                                # if backspace is pressed, delete a character.
+                                if keyChar == pygame.constants.K_BACKSPACE:
+                                    obj.text = obj.text[:-1]
+                                else:
+                                    # otherwise, populate text entry with new character.
+                                    obj.text += keyChar
+                                obj.set_text()
     def draw_current_scene(self):
         value = self.scenes.get(self.currentScene)
         value.Draw()
@@ -608,15 +867,16 @@ class Game(object):
         pass
     def Unload(self, content):
         pass
+    def tick(self):
+        for event in pygame.event.get():
+            self.processEvent(event)
+
+        self.Update()
+        self.Draw()
+        self.elapsed = self.clock.tick(self.FPS)
     def mainloop(self):
         while self.running:
-            for event in pygame.event.get():
-                self.processEvent(event)
-
-            self.Update()
-            self.Draw()
-            self.elapsed = self.clock.tick(self.FPS)
-                
+            self.tick()
         pygame.mixer.quit()
         pygame.quit ()
         sys.exit()

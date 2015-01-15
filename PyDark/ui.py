@@ -38,10 +38,13 @@ class Event(object):
     
 
 class BaseSprite(pygame.sprite.Sprite):
-    def __init__(self, position):
+    def __init__(self, position, depth=1, parent=None):
         pygame.sprite.Sprite.__init__(self)
+        self.parent = parent # sprite parent (if any), used for precise collision checking.
+        self.depth = depth # sprite depth(z-index)
         self.surface = None
         self.center = False
+        self.focus = False # patch on 1/8/2015. Allows us to only handle events for this sprite and nothing else.
         self.focused = False
         self.in_hover = False
         self.adjusted = False
@@ -74,7 +77,6 @@ class BaseSprite(pygame.sprite.Sprite):
 
     def getCoords(self):
         return self.position
-        
 
 
 class TextBox(BaseSprite):
@@ -141,9 +143,20 @@ class TextBox(BaseSprite):
         if mouseCoords:
             mouse_position = pygame.mouse.get_pos()
 
+            # If sprite has a parent.
+            # Create a new pygame.Rect() object and combine the parents coordinates with /
+            # this sprites coordinates for precise collision checking.
+            if self.parent:
+                top = self.rect.top + self.parent.rect.top
+                left = self.rect.left + self.parent.rect.left
+                self.test_rect = pygame.Rect(left, top,
+                                             self.rect.width, self.rect.height)
+            else:
+                self.test_rect = self.rect
+
             # check for mouse input
             if pygame.mouse.get_pressed() == (1, 0, 0):
-                if self.rect.collidepoint(mouse_position):
+                if self.test_rect.collidepoint(mouse_position):
                     self.focused = True
                     self.change_image(image=self.image_selected)
                 else:
@@ -152,7 +165,7 @@ class TextBox(BaseSprite):
             # check for mouse hover
             else:
                 if self.image_hover:
-                    if self.rect.collidepoint(mouse_position):
+                    if self.test_rect.collidepoint(mouse_position):
                         self.in_hover = True
                         self.change_image(image=self.image_hover)
                     else:
@@ -193,6 +206,8 @@ class Button(BaseSprite):
             self.image_hover = pygame.image.load(image_hover).convert_alpha()
         if image_selected:
             self.image_selected = pygame.image.load(image_selected).convert_alpha()
+
+        self.surface = pygame.Surface(self.default_image.get_size(), pygame.SRCALPHA, 32)
             
         self.textcolor = textcolor
         self.font = font
@@ -219,7 +234,7 @@ class Button(BaseSprite):
         # Wether its focused, being hovered by the mouse, etc.
         if image:
             comparison = self.last_image_change_timestamp  - datetime.datetime.now()
-            if abs(comparison.total_seconds()) > 0.1:
+            if abs(comparison.total_seconds()) > 0.01:
                 self._button = image
                 self.last_image_change_timestamp  = datetime.datetime.now()
     def set_text(self, new_text=None):
@@ -237,15 +252,27 @@ class Button(BaseSprite):
                 y = (self.size[1] - text.get_size()[1]) / 2
                 self._button.blit(text, (x, y))
     def Update(self, mouseCoords=None, clickEvent=False, hoverEvent=False):
+        self.surface.blit(self._button, (0, 0))
         self.rect = self._button.get_rect()
         self.rect.topleft = self.position
 
         if mouseCoords:
             mouse_position = pygame.mouse.get_pos()
 
-            # check for mouse input
+            # If sprite has a parent.
+            # Create a new pygame.Rect() object and combine the parents coordinates with /
+            # this sprites coordinates for precise collision checking.
+            if self.parent:
+                top = self.rect.top + self.parent.rect.top
+                left = self.rect.left + self.parent.rect.left
+                self.test_rect = pygame.Rect(left, top,
+                                             self.rect.width, self.rect.height)
+            else:
+                self.test_rect = self.rect
+
+            # Check for mouse input
             if pygame.mouse.get_pressed() == (1, 0, 0):
-                if self.rect.collidepoint(mouse_position):
+                if self.test_rect.collidepoint(mouse_position):
                     self.focused = True
                     self.change_image(image=self.image_selected)
                     if self.sound: self.sound.play()
@@ -254,25 +281,25 @@ class Button(BaseSprite):
                 else:
                     self.focused = False
                     self.change_image(image=self.default_image)
-            # check for mouse hover
+            # Check for mouse hover
             if hoverEvent:
                 if self.image_hover:
-                    if self.rect.collidepoint(mouse_position):
+                    if self.test_rect.collidepoint(mouse_position):
                         self.in_hover = True
                         self.change_image(image=self.image_hover)
                     else:
                         self.in_hover = False
                         self.change_image(image=self.default_image)               
-    def Draw(self, surface):
-        if self.center:
-            if not self.adjusted:
-                x = (surface.get_size()[0]/2) - (self.size[0]/2)
-                y = self.position[1]
-                self.position = (x, y)
-                self.set_xy(x, y)
-                self.rect.topleft = self.position
-                self.adjusted = True
-        surface.blit(self._button, self.position)
+    #def Draw(self, surface):
+    #    if self.center:
+    #        if not self.adjusted:
+    #            x = (surface.get_size()[0]/2) - (self.size[0]/2)
+    #            y = self.position[1]
+    #            self.position = (x, y)
+    #            self.set_xy(x, y)
+    #            self.rect.topleft = self.position
+    #            self.adjusted = True
+    #    surface.blit(self._button, self.position)
     def __call__(self):
         return self._button
     def __repr__(self):
@@ -295,28 +322,148 @@ class Label(BaseSprite):
         self.color = color
         self.f = pygame.font.SysFont(font, size)
         self._label = self.f.render(text, aa, color)
+        self.surface = pygame.Surface(self._label.get_size(), pygame.SRCALPHA, 32)
         self.center = center
         self.set_wh(self._label.get_size()[0], self._label.get_size()[1])
-    def size(self):
-        return self._label.get_size()
+        self.size = self._label.get_size()
+    #def size(self):
+    #    return self._label.get_size()
     def set_text(self, text):
         self.text = text
         self._label = self.f.render(self.text, True, self.color)
     def Update(self, mouseCoords=None, clickEvent=False, hoverEvent=False):
-        pass
-    def Draw(self, surface):
-        if self.center:
-            if not self.adjusted:
-                x = (surface.get_size()[0]/2) - (self.size()[0]/2)
-                y = self.position[1]
-                self.position = (x, y)
-                super(Label, self).set_xy(x, y)
-                self.adjusted = True
-        surface.blit(self._label, self.position)
+        self.surface.blit(self._label, (0, 0))
+        self.rect = self._label.get_rect()
+        self.rect.topleft = self.position
+    #def Draw(self, surface):
+    #    if self.center:
+    #        if not self.adjusted:
+    #            x = (surface.get_size()[0]/2) - (self.size()[0]/2)
+    #            y = self.position[1]
+    #            self.position = (x, y)
+    #            #print self.name, x, y
+    #            super(Label, self).set_xy(x, y)
+    #            self.adjusted = True
+    #    surface.blit(self._label, self.position)
     def __call__(self):
         return self._label
     def __repr__(self):
         return "<PyDark.ui.Label: {0}>".format(self.name)
+
+
+class Dialog(BaseSprite):
+    def __init__(self, name, position, image, icon, icon_position,
+                 title, message, message_color, message_size, message_position,
+                 title_position, title_color, font, title_size,
+                 button_instance, customFont=False,
+                 offset=(20, 20), center=False):
+        BaseSprite.__init__(self, position)
+        self.position = position
+        self.center = center
+        self.title = title
+        self.name = name
+        self.icon = pygame.image.load(icon).convert_alpha()
+        self.image = pygame.image.load(image).convert_alpha()
+        self.rect = self.image.get_rect()
+        self.size = self.image.get_size()
+        self.surface = pygame.Surface(self.size, pygame.SRCALPHA, 32)
+        self.icon_position = icon_position
+        self.title_position = title_position
+        self.title_color = title_color
+        self.font = font
+        self.title_size = title_size
+        self.customFont = customFont
+        self.message = message
+        self.message_color = message_color
+        self.message_size = message_size
+        self.message_position = message_position
+        self.button_instance = button_instance
+    def Update(self, mouseCoords=None, clickEvent=False, hoverEvent=False):
+        self.rect.topleft = self.position
+        self.surface.blit(self.image, (0, 0))
+        self.surface.blit(self.icon, self.icon_position)
+        # display title
+        display_text(
+            surface=self.surface,
+            text=self.title,
+            font=self.font,
+            fontColor=self.title_color,
+            fontSize=self.title_size,
+            customFont=self.customFont,
+            pos=self.title_position,
+        )
+        # display message(body)
+        display_text(
+            surface=self.surface,
+            text=self.message,
+            font=self.font,
+            fontColor=self.message_color,
+            fontSize=self.message_size,
+            customFont=self.customFont,
+            pos=self.message_position,
+        )
+        # call buttons Update class-method to pass event-handling.
+        self.button_instance.Update(mouseCoords, clickEvent, hoverEvent)
+        # display button
+        self.surface.blit(self.button_instance._button, self.button_instance.rect.topleft)
+
+
+class Tabbed_Window(BaseSprite):
+    def __init__(self, name, position, image, icon, icon_position,
+                 title, message, message_color, message_size, message_position,
+                 title_position, title_color, font, title_size, customFont=False,
+                 offset=(20, 20), center=False):
+        BaseSprite.__init__(self, position)
+        self.position = position
+        self.center = center
+        self.title = title
+        self.name = name
+        if icon:
+            self.icon = pygame.image.load(icon).convert_alpha()
+        else:
+            self.icon = None
+        self.image = pygame.image.load(image).convert_alpha()
+        self.rect = self.image.get_rect()
+        self.size = self.image.get_size()
+        self.surface = pygame.Surface(self.size, pygame.SRCALPHA, 32)
+        if icon_position:
+            self.icon_position = icon_position
+        else:
+            self.icon_position = None
+        self.title_position = title_position
+        self.title_color = title_color
+        self.font = font
+        self.title_size = title_size
+        self.customFont = customFont
+        self.message = message
+        self.message_color = message_color
+        self.message_size = message_size
+        self.message_position = message_position
+    def Update(self, mouseCoords=None, clickEvent=False, hoverEvent=False):
+        self.rect.topleft = self.position
+        self.surface.blit(self.image, (0, 0))
+        if self.icon:
+            self.surface.blit(self.icon, self.icon_position)
+        # display title
+        display_text(
+            surface=self.surface,
+            text=self.title,
+            font=self.font,
+            fontColor=self.title_color,
+            fontSize=self.title_size,
+            customFont=self.customFont,
+            pos=self.title_position,
+        )
+        # display caption
+        display_text(
+            surface=self.surface,
+            text=self.message,
+            font=self.font,
+            fontColor=self.message_color,
+            fontSize=self.message_size,
+            customFont=self.customFont,
+            pos=self.message_position,
+        )        
     
 
 class Overlay(object):
@@ -327,18 +474,27 @@ class Overlay(object):
     frame = Overlay(parent=self, size=(300, 250))
     frame.Load(Button(name="button1", text="Submit", position=(0,0), on_press=self.on_press))
     """
-    def __init__(self, parent, size, color=None, endcolor=None, image=None, position=(0,0)):
+    def __init__(self, name, parent, size, color=None, endcolor=None, image=None,
+                 invisible=False, position=(0,0)):
         self.position = position
         self.drawables = dict()
         self.parent = parent
         self.image = image
+        self.name = name
         if image:
             self.panel = pygame.image.load(image).convert_alpha()
         else:
-            self.panel = pygame.Surface(size).convert()
-            self.panel.fill(color)
-            if color and endcolor:
-                fill_gradient(self.panel, color, endcolor)
+            if not invisible:
+                self.panel = pygame.Surface(size).convert()
+                self.panel.fill(color)
+                if color and endcolor:
+                    fill_gradient(self.panel, color, endcolor)
+                self.invisible = False
+            else:
+                self.panel = pygame.Surface(size, pygame.SRCALPHA, 32)
+                self.invisible = True
+        # added 1/8/2015 as a patch to "refresh" the panel surface.
+        self.surface = pygame.Surface(size, pygame.SRCALPHA, 32)
         self.size = size
         self.color = color
         self.endcolor = endcolor
@@ -354,16 +510,28 @@ class Overlay(object):
             self.drawables.pop(element.name)
         except KeyError:
             pass
+    def Center(self, element):
+        if element.center:
+            if not element.adjusted:
+                x = (self.surface.get_size()[0]/2) - (element.size[0]/2)
+                y = element.position[1]
+                element.set_xy(x, y)
+                element.rect.topleft = self.position
+                element.adjusted = True        
     def Draw(self, element=None):
+        self.surface.blit(self.panel, (0, 0))
         if element is None:
-            for name, element in self.drawables.iteritems():
-                element.Draw(self.panel)
-                #self.panel.blit(element(), element.position)
-                #self.Update(element)
+            drawables_sorted = sorted([j[1] for j in self.drawables.items()], key=lambda s: s.depth, reverse=False)
+            for element in drawables_sorted:
+                if element.center:
+                    self.Center(element)
+                self.surface.blit(element.surface, element.rect)
+                #element.Draw(self.panel)
         else:
-            element.Draw(self.panel)
-            #self.Update(element)
-            #self.panel.blit(element(), element.position)
+            #element.Draw(self.panel)
+            if element.center:
+                self.Center(element)
+            self.surface.blit(element.surface, element.rect)
     def Update(self, element=None):
         if element is None:
             for name, element in self.drawables.iteritems():
@@ -474,10 +642,12 @@ def wrap_multi_line(text, font, maxwidth):
     return list(lines)
 
 
-def display_text(surface, font="Arial", fontsize=12, pos=(0,0)):
+def display_text(surface, text, font="Arial", fontColor=(0,0,0), fontSize=14, customFont=False, pos=(0,0)):
     """Display text on a surface. Parameters: (surface, fontname, fontsize, position)"""
-    txt = "I love the CookBook!"
-    f = SysFont(font, fontsize)
-    s = f.render(txt, 1, (0,0,0))
+    if not customFont:
+        f = pygame.font.SysFont(font, fontSize)
+    else:
+        f = pygame.font.Font(font, fontSize)
+    s = f.render(text, 1, fontColor)
     surface.blit(s, pos)
 
