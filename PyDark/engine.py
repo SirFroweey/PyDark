@@ -619,6 +619,8 @@ class Game(object):
         # Dictionary containing keybinds and functions to invoke when pressed.
         self.key_pressed_binds = {}
         self.key_held_binds = {}
+        # List of DarkSprites that we SHOULD ONLY catch evets for
+        self.focused_sprites = []
         # List of UI elements that we SHOULD ONLY catch events for
         self.focus_on_ui = []
         # Window title for our Game
@@ -693,13 +695,27 @@ class Game(object):
         except:
             pass
     def add_ui_focus_element(self, element):
+        """Tell PyGame to only handle events for this UI element."""
         self.remove_focused_ui_element(element)
         self.focus_on_ui.append(element)
     def remove_focused_ui_element(self, element):
+        """Remove this focused UI element."""
         if self.focus_on_ui.__contains__(element):
             self.focus_on_ui.remove(element)
+    def focus_on_sprite(self, element):
+        """Tell PyGame to only handle events for this DarkSprite."""
+        self.remove_focused_sprite(element)
+        self.focused_sprites.append(element)
+    def remove_focused_sprite(self, element):
+        """Remove focus from this DarkSprite."""
+        if self.focused_sprites.__contains__(element):
+            self.focused_sprites.remove(element)
     def clear_focused_ui_elements(self):
+        """Clear all focused UI elements."""
         self.focus_on_ui = []
+    def clear_focused_sprites(self):
+        """Clear all focused DarkSprites."""
+        self.focus_on_sprite = []
     def disable_debugging(self):
         self.debug = False
     def enable_debugging(self):
@@ -821,8 +837,8 @@ class Game(object):
                     )
     def handle_scene_objects(self, pos, item, clickEvent, hoverEvent, keyEvent,
                              keyChar):
-        if len(self.focus_on_ui) > 0:
-            for e in self.focus_on_ui:
+        if len(self.focused_sprites) > 0:
+            for e in self.focused_sprites:
                 if clickEvent:
                     if e.rect.collidepoint(pos):
                         # fire the sprites OnClick() class-method.
