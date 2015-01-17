@@ -126,7 +126,10 @@ class ClientProtocol(LineReceiver):
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
                 # execute handle
-                eval(command)
+                try:
+                    eval(command)
+                except:
+                    print "Error on function {0}: ".format(command) + sys.exc_info()[0]
 
     def message(self, line):
         self.sendLine(encode_packet(line))
@@ -209,9 +212,9 @@ class ServerProtocol(LineReceiver):
         if not client:
             for c in list(self.factory.clients.keys()):
                 _player = self.lookupPlayer(c, key_supplied=True)
-                _player.net.message(encode_packet(line))
+                _player.net.message(line)
         else:
-            client.net.message(encode_packet(line))
+            client.net.message(line)
 
     def updateCoordinates(self):
         # This function is called periodically by the server.

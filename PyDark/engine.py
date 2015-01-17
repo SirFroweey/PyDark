@@ -290,6 +290,7 @@ def write_hdd(fileName, data):
     f = file(fileName, "w")
     f.write(base64.b64encode(data))
     f.close()
+    return True
 
 
 def read_hdd(fileName):
@@ -322,10 +323,11 @@ def preload(file_list, alpha=True):
 
 class DarkSprite(pygame.sprite.Sprite):
     def __init__(self, name, starting_position=None, sprite_list=None,
-                 sprite_sheet=None):
+                 sprite_sheet=None, depth=1):
         """Base PyDark 2D sprite. Takes 3 arguments: (name, starting_position, sprite_list)"""
         pygame.sprite.Sprite.__init__(self)
         self.name = name # name of our sprite (for reference)
+        self.depth = depth
         self.index = 0 # Contains the index or counter to our current subsprite image.
         self.subsprites = [] # Subsprites for this DarkSprite instance.
         self.parent_sprite = None # Parent DarkSprite of this DarkSprite (if any)
@@ -417,7 +419,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.current_image = self.image
         self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
         self.rect = self.image.get_rect()
-    def Update(self):
+    def Update(self, keyEvent=False, keyHeldEvent=False, keyChar=None):
         if self.surface is not None:
             self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
             self.surface.blit(self.current_image, (0, 0))
@@ -551,8 +553,9 @@ class Scene(object):
     def Draw(self, item=None):
         """Draw all self.objects onto our Scene() view."""
         if item is None:
+            objects_sorted = sorted([j for j in self.objects], key=lambda s: s.depth, reverse=False)
             # draw our objects onto the Scene
-            for item in self.objects:
+            for item in objects_sorted:
                 # Handle drawing our map
                 if isinstance(item, Map):
                     pos = item.position
@@ -608,10 +611,14 @@ class Game(object):
     def __init__(self, title, window_size, icon=None,
                  center_window=True, FPS=30, online=False,
                  server_ip=None, server_port=None, protocol=None, log_or_not=False):
+        """parameters: (title, window_size, icon, center_window, FPS, online, server_ip, server_port, protocol, log_or_not)"""
         self.debug = False
         self.clock = pygame.time.Clock()
         self.FPS = FPS
         self.elapsed = 0
+        # Dictionary containing keybinds and functions to invoke when pressed.
+        self.key_pressed_binds = {}
+        self.key_held_binds = {}
         # List of UI elements that we SHOULD ONLY catch events for
         self.focus_on_ui = []
         # Window title for our Game
@@ -668,6 +675,23 @@ class Game(object):
                 
         elif isinstance(instance, DarkSprite):
             print "DarkSprite:", instasnce
+    def register_key_pressed(self, keycode, function):
+        """Register a function handle when the specified key is pressed."""
+        self.key_pressed_binds[keycode] = function
+    def register_key_held(self, keycode, function):
+        """Register a function handle when the specified key is held."""
+        self.key_held_binds[keycode] = function
+    def remove_key_bind(self, keycode):
+        """Remove a function handle for the specified keybind."""
+        try:
+            self.key_pressed_binds.pop(keycode)
+        except:
+            pass
+
+        try:
+            self.key_held_binds.pop(keycode)
+        except:
+            pass
     def add_ui_focus_element(self, element):
         self.remove_focused_ui_element(element)
         self.focus_on_ui.append(element)
@@ -746,6 +770,14 @@ class Game(object):
                 char = event.unicode
             self.update_scene_objects(keyEvent=True, keyChar=char)
             self.update_scene_players(keyEvent=True, keyChar=event.key)
+            self.handle_key_pressed_binds(keyEvent=True, keyChar=event.key)
+
+    def handle_key_pressed_binds(self, keyEvent=False, keyChar=None):
+        """Handles global key pressed(bind) events."""
+        keyChar = pygame.key.name(keyChar)
+        lookup = self.key_pressed_binds.get(keyChar)
+        if lookup:
+            lookup(keyChar)
 
     def update_scene_players(self, clickEvent=False, hoverEvent=False, keyEvent=False,
                              keyChar=None):
@@ -765,38 +797,51 @@ class Game(object):
         pos = pygame.mouse.get_pos()
         this_scene = self.get_current_scene()
         for item in this_scene.objects:
-            if isinstance(item, ui.Overlay):
-                # This item is an Overlay /
-                # iterate through all its self.drawables.
-                self.handle_overlay_objects(
-                    pos,
-                    item,
-                    clickEvent,
-                    hoverEvent,
-                    keyEvent,
-                    keyChar
-                )
-            if isinstance(item, DarkSprite):
-                # This item is a DarkSprite.
-                self.handle_scene_objects(
-                    pos,
-                    item,
-                    clickEvent,
-                    hoverEvent,
-                    keyEvent,
-                    keyChar
-                )
+            if not item.hide:
+                if isinstance(item, ui.Overlay):
+                    # This item is an Overlay /
+                    # iterate through all its self.drawables.
+                    self.handle_overlay_objects(
+                        pos,
+                        item,
+                        clickEvent,
+                        hoverEvent,
+                        keyEvent,
+                        keyChar
+                    )
+                if isinstance(item, DarkSprite):
+                    # This item is a DarkSprite.
+                    self.handle_scene_objects(
+                        pos,
+                        item,
+                        clickEvent,
+                        hoverEvent,
+                        keyEvent,
+                        keyChar
+                    )
     def handle_scene_objects(self, pos, item, clickEvent, hoverEvent, keyEvent,
                              keyChar):
-        if clickEvent:
-            if item.rect.collidepoint(pos):
-                # fire the sprites OnClick() class-method.
-                item.OnClick(pos)
-                
-        if hoverEvent:
-            if item.rect.collidepoint(pos):
-                # fire the sprites OnHover() class-method.
-                item.OnHover(pos)
+        if len(self.focus_on_ui) > 0:
+            for e in self.focus_on_ui:
+                if clickEvent:
+                    if e.rect.collidepoint(pos):
+                        # fire the sprites OnClick() class-method.
+                        e.OnClick(pos)
+                        
+                if hoverEvent:
+                    if e.rect.collidepoint(pos):
+                        # fire the sprites OnHover() class-method.
+                        e.OnHover(pos)
+        else:
+            if clickEvent:
+                if item.rect.collidepoint(pos):
+                    # fire the sprites OnClick() class-method.
+                    item.OnClick(pos)
+                    
+            if hoverEvent:
+                if item.rect.collidepoint(pos):
+                    # fire the sprites OnHover() class-method.
+                    item.OnHover(pos)
     def handle_overlay_objects(self, pos, item, clickEvent, hoverEvent, keyEvent,
                                keyChar):
 

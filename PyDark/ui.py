@@ -38,8 +38,9 @@ class Event(object):
     
 
 class BaseSprite(pygame.sprite.Sprite):
-    def __init__(self, position, depth=1, parent=None):
+    def __init__(self, position, depth=1, hide=False, parent=None):
         pygame.sprite.Sprite.__init__(self)
+        self.hide = False # determine if this should be drawn
         self.parent = parent # sprite parent (if any), used for precise collision checking.
         self.depth = depth # sprite depth(z-index)
         self.surface = None
@@ -475,7 +476,9 @@ class Overlay(object):
     frame.Load(Button(name="button1", text="Submit", position=(0,0), on_press=self.on_press))
     """
     def __init__(self, name, parent, size, color=None, endcolor=None, image=None,
-                 invisible=False, position=(0,0)):
+                 invisible=False, position=(0,0), depth=1, hide=False):
+        self.depth = depth
+        self.hide = hide
         self.position = position
         self.drawables = dict()
         self.parent = parent
