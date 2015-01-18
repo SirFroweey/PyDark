@@ -444,6 +444,9 @@ class DarkSprite(pygame.sprite.Sprite):
     def OnHover(self, pos):
         """Called when user hovers over the sprite."""
         pass
+    def GetPosition(self):
+        """Returns the DarkSprites current drawn position as a Vector2D object."""
+        return vector2d.Vec2d(self.rect.topleft)
     def SetPosition(self, position=None):
         """Sets the sprites position(if passed), otherwise, it sets the sprite to the aforementioned starting position."""
         if self.rect:
@@ -683,6 +686,10 @@ class Game(object):
     def register_key_held(self, keycode, function):
         """Register a function handle when the specified key is held."""
         self.key_held_binds[keycode] = function
+    def remove_all_key_binds(self):
+        """Remove all register key pressed and key held bindings."""
+        self.key_pressed_binds = {}
+        self.key_held_binds = {}
     def remove_key_bind(self, keycode):
         """Remove a function handle for the specified keybind."""
         try:
