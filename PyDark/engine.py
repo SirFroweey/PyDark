@@ -326,12 +326,14 @@ class DarkSprite(pygame.sprite.Sprite):
                  sprite_sheet=None, depth=1):
         """Base PyDark 2D sprite. Takes 3 arguments: (name, starting_position, sprite_list)"""
         pygame.sprite.Sprite.__init__(self)
+        self.focused = False # Allows us to test if the ChatBox has been focused(clicked on).
         self.name = name # name of our sprite (for reference)
         self.depth = depth
         self.index = 0 # Contains the index or counter to our current subsprite image.
         self.subsprites = [] # Subsprites for this DarkSprite instance.
         self.parent_sprite = None # Parent DarkSprite of this DarkSprite (if any)
         self.sprite_list = None
+        self.text_location = None # Defines where to draw inputed text(if any)
         if sprite_list:
             self.sprite_list = sprite_list
         elif sprite_sheet:
@@ -436,6 +438,9 @@ class DarkSprite(pygame.sprite.Sprite):
                     # Call the AddText class-method again to re-render the font surface.
                     self.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
                 self.surface.blit(j, pos)
+    def OnKey(self, event):
+        """Called when game.receive_user_input() is binded to this DarkSprite. Handles keystroke input."""
+        pass
     def Collision(self, other):
         pass
     def OnClick(self, pos):
@@ -619,6 +624,8 @@ class Game(object):
         self.clock = pygame.time.Clock()
         self.FPS = FPS
         self.elapsed = 0
+        self.receive_input_for = None # defines which DarkSprite to receive input for.
+        self.receive_input_for_keybind = None # defines which key stops(submits) receiving text input.
         # Dictionary containing keybinds and functions to invoke when pressed.
         self.key_pressed_binds = {}
         self.key_held_binds = {}
@@ -661,6 +668,20 @@ class Game(object):
                 raise ValueError, "You must pass a PyDark.net.ClientProtocol!"
         # start pygame display
         self.initialize()
+    def receive_user_input(self, darksprite, keystroke="return"):
+        """Instruct PyDark to transfer all keystrokes onto the target DarkSprites surface using the DarkSprites text_location."""
+        if isinstance(darksprite, DarkSprite):
+            if darksprite.text_location is not None:
+                self.receive_input_for = darksprite
+                self.receive_input_for_keybind = keystroke
+            else:
+                raise ValueError, "You must set the DarkSprites text_location attribute!"
+        else:
+            raise ValueError, "You must specify a DarkSprite instance!"
+    def stop_user_input(self):
+        """Stop receiving user input from all DarkSprites."""
+        self.receive_input_for = None
+        self.receive_input_for_keybind = None
     def delete_object(self, instance):
         # removes an object completely from the game.
         found = False
@@ -679,7 +700,7 @@ class Game(object):
                                 break
                 
         elif isinstance(instance, DarkSprite):
-            print "DarkSprite:", instasnce
+            print "DarkSprite:", instance
     def register_key_pressed(self, keycode, function):
         """Register a function handle when the specified key is pressed."""
         self.key_pressed_binds[keycode] = function
@@ -791,9 +812,22 @@ class Game(object):
                 char = pygame.constants.K_BACKSPACE
             else:
                 char = event.unicode
-            self.update_scene_objects(keyEvent=True, keyChar=char)
-            self.update_scene_players(keyEvent=True, keyChar=event.key)
-            self.handle_key_pressed_binds(keyEvent=True, keyChar=event.key)
+
+            # If there's a DarkSprite that we are receiving text input for:
+            if self.receive_input_for is not None:
+                # If the key to stop receiving user input has been pressed.
+                if pygame.key.name(event.key) == self.receive_input_for_keybind:
+                    # Stop receiving user input.
+                    self.stop_user_input()
+                # Otherwise 
+                else:
+                    # Process events only for this DarkSprite.
+                    self.receive_input_for.OnKey(event)
+            else:
+                # Otherwise, process events for everything.
+                self.update_scene_objects(keyEvent=True, keyChar=char)
+                self.update_scene_players(keyEvent=True, keyChar=event.key)
+                self.handle_key_pressed_binds(keyEvent=True, keyChar=event.key)
 
     def handle_key_pressed_binds(self, keyEvent=False, keyChar=None):
         """Handles global key pressed(bind) events."""
