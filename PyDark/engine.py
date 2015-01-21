@@ -388,6 +388,9 @@ class DarkSprite(pygame.sprite.Sprite):
         self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
         self.rect = self.current_image.get_rect()
         return True
+    def GetSize(self):
+        """Returns the DarkSprites current images size. (width, height)."""
+        return self.current_image.get_size()
     def AddText(self, fontHandle, fontColor, position, text,
                 name="text1", redraw=False, redraw_function=None):
         textSurface = fontHandle.render(text, True, fontColor)
@@ -817,11 +820,15 @@ class Game(object):
                     self.mainloop()
         else:
             raise ValueError, "You must supply at least one-scene."
+    def OnClose(self):
+        """Called when the game is closed."""
+        pass
     def processEvent(self, event):
         if event.type == pygame.QUIT:
             self.running = False
             if self.connection:
                 self.connection.handle.disconnect()
+            self.OnClose()
             
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self.update_scene_objects(clickEvent=True)
