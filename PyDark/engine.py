@@ -425,8 +425,7 @@ class DarkSprite(pygame.sprite.Sprite):
         if self.surface is not None:
             self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
             self.surface.blit(self.current_image, (0, 0))
-            for k in self.subsprites:
-                self.surface.blit(k.current_image, k.rect.topleft)
+            self.process_subsprites(keyEvent, keyHeldEvent, keyChar)
             # draw text onto sprite.
             for key, value in self.text_surfaces.iteritems():
                 # unpack values from Tuple
@@ -438,6 +437,23 @@ class DarkSprite(pygame.sprite.Sprite):
                     # Call the AddText class-method again to re-render the font surface.
                     self.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
                 self.surface.blit(j, pos)
+
+    def process_subsprites(self, keyEvent, keyHeldEvent, keyChar):
+        """Called by parent DarkSprite. Handles drawing subsprites and passing events to them."""
+        for k in self.subsprites:
+            # draw subsprites.
+            self.surface.blit(k.current_image, k.rect.topleft)
+            for key, value in k.text_surfaces.iteritems():
+                # unpack values from Tuple
+                j, pos, redraw, redraw_function, font_handle, font_color, text = value 
+                # if redraw flag is True, then re-render the font text using the redraw_function.
+                if redraw:
+                    # Call the redraw_function and store its return value as a string.
+                    text = str(redraw_function())
+                    # Call the AddText class-method again to re-render the font surface.
+                    k.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
+                new_pos = (k.rect.topleft[0] + pos[0], k.rect.topleft[1] + pos[1])
+                self.surface.blit(j, new_pos)
     def OnKey(self, event):
         """Called when game.receive_user_input() is binded to this DarkSprite. Handles keystroke input."""
         pass
