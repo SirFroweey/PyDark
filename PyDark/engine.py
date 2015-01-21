@@ -452,6 +452,8 @@ class DarkSprite(pygame.sprite.Sprite):
                     text = str(redraw_function())
                     # Call the AddText class-method again to re-render the font surface.
                     k.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
+                # Calculate this subsprites position by combining its text position /
+                # with the parent DarkSprites position.
                 new_pos = (k.rect.topleft[0] + pos[0], k.rect.topleft[1] + pos[1])
                 self.surface.blit(j, new_pos)
     def OnKey(self, event):
@@ -477,6 +479,10 @@ class DarkSprite(pygame.sprite.Sprite):
                 self.rect.topleft = self.starting_position
             return True
         return False
+    def ChangeImage(self, index):
+        """Change the DarkSprites currently displayed image using an index."""
+        self.index = index
+        self.current_image = self.sprite_list[self.index]
 
 
 class BaseSprite(pygame.sprite.Sprite):
