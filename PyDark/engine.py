@@ -437,7 +437,9 @@ class DarkSprite(pygame.sprite.Sprite):
                     # Call the AddText class-method again to re-render the font surface.
                     self.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
                 self.surface.blit(j, pos)
-
+            self.Step(keyEvent, keyHeldEvent, keyChar)
+    def Step(self, keyEvent, keyHeldEvent, keyChar):
+        pass
     def process_subsprites(self, keyEvent, keyHeldEvent, keyChar):
         """Called by parent DarkSprite. Handles drawing subsprites and passing events to them."""
         for k in self.subsprites:
