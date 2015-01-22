@@ -353,12 +353,19 @@ class DarkSprite(pygame.sprite.Sprite):
                            first.rect.top + second.rect.top,
                            first.rect.width,
                            first.rect.height)
+    @staticmethod
+    def combine_rects(first, second):
+        """Combine the X and Y coordinates of two pygame.Rects together. Takes 2 parameters: (first, second). Must be DarkSprite instances."""
+        return DarkSprite.CombineRects(first, second)
     def GetSubSprite(self, name):
         """Returns a handle to the specified DarkSprite instance."""
         for k in self.subsprites:
             if k.name == name:
                 return k
         return None
+    def get_subsprite(self, name):
+        """Returns a handle to the specified DarkSprite instance."""
+        return self.GetSubSprite(self, name)
     def Draw(self, surface=None):
         if surface:
             surface.blit(self.image, self.rect)
@@ -369,10 +376,16 @@ class DarkSprite(pygame.sprite.Sprite):
         #for k in self.subsprites:
             #self.current_image.blit(k.current_image, k.rect.topleft)
         pass
+    def render_children(self):
+        """Draw subsprites onto this sprite."""
+        return self.RenderChildren()
     def AddChild(self, darkspriteinstance):
         """Add a subsprite to this sprite."""
         darkspriteinstance.parent_sprite = self
         self.subsprites.append(darkspriteinstance)
+    def add_child(self, darkspriteinstance):
+        """Add a subsprite to this sprite."""
+        return self.AddChild(darkspriteinstance)
     def LoadContent(self, filename=None, alpha=True, preloaded_sprite_list=None):
         # if user supplied a list of subsprites for animation.
         if preloaded_sprite_list:
@@ -395,14 +408,25 @@ class DarkSprite(pygame.sprite.Sprite):
         self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
         self.rect = self.current_image.get_rect()
         return True
+    def load_content(self, filename=None, alpha=True, preloaded_sprite_list=None):
+        """Load an image or set of images into the DarkSprite."""
+        return self.LoadContent(filename, alpha, preloaded_sprite_list)
     def GetSize(self):
         """Returns the DarkSprites current images size. (width, height)."""
         return self.current_image.get_size()
+    def get_size(self):
+        """Returns the DarkSprites current images size. (width, height)."""
+        return self.GetSize()
     def AddText(self, fontHandle, fontColor, position, text,
                 name="text1", redraw=False, redraw_function=None):
         textSurface = fontHandle.render(text, True, fontColor)
         textSurface = (textSurface, position, redraw, redraw_function, fontHandle, fontColor, text)
         self.text_surfaces[name] = textSurface
+    def add_text(self, fontHandle, fontColor, position, text,
+                name="text1", redraw=False, redraw_function=None):
+        """Render text in-top of the DarkSprite."""
+        return self.AddText(fontHandle, fontColor, position, text,
+                            name, redraw, redraw_function)
     def CreateBlock(self, width, height, color=(255, 255, 255, 255),
                     invisible=False):
         """Create a pygame.Surface object. Creates a block image."""
@@ -415,6 +439,10 @@ class DarkSprite(pygame.sprite.Sprite):
         self.current_image = self.image
         self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
         self.rect = self.image.get_rect()
+    def create_block(self, width, height, color=(255, 255, 255, 255),
+                    invisible=False):
+        """Create a pygame.Surface object. Creates a block image."""
+        return self.CreateBlock(width, height, color, invisible)
     def CreateHexagon(self, color=(255, 255, 255, 255), size=[52, 52],
                       radius=21, x=42, y=42, rotate=27, invisible=False):
         point_list = Hexagon(radius, x, y, 0)
@@ -431,6 +459,9 @@ class DarkSprite(pygame.sprite.Sprite):
         self.current_image = self.image
         self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)
         self.rect = self.image.get_rect()
+    def create_hexagon(self, color=(255, 255, 255, 255), size=[52, 52],
+                      radius=21, x=42, y=42, rotate=27, invisible=False):
+        return self.CreateHexagon(color, size, radius, x, y, rotate, invisible)
     def Update(self, keyEvent=False, keyHeldEvent=False, keyChar=None):
         if self.surface is not None:
             self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
@@ -498,6 +529,8 @@ class DarkSprite(pygame.sprite.Sprite):
     def GetPosition(self):
         """Returns the DarkSprites current drawn position as a Vector2D object."""
         return vector2d.Vec2d(self.rect.topleft)
+    def get_position(self):
+        return self.GetPosition()
     def SetPosition(self, position=None):
         """Sets the sprites position(if passed), otherwise, it sets the sprite to the aforementioned starting position."""
         if self.rect:
@@ -507,10 +540,16 @@ class DarkSprite(pygame.sprite.Sprite):
                 self.rect.topleft = self.starting_position
             return True
         return False
+    def set_position(self, position=None):
+        """Sets the sprites position(if passed), otherwise, it sets the sprite to the aforementioned starting position."""
+        return self.SetPosition(position)
     def ChangeImage(self, index):
         """Change the DarkSprites currently displayed image using an index."""
         self.index = index
         self.current_image = self.sprite_list[self.index]
+    def change_image(self, index):
+        """Change the DarkSprites currently displayed image using an index."""
+        return self.ChangeImage(index)
 
 
 class BaseSprite(pygame.sprite.Sprite):
@@ -677,6 +716,20 @@ class Scene(object):
         self.map = map_instance
     def __repr__(self):
         return "<PyDark.engine.Scene: {0}>".format(self.name)
+
+
+class KeyBind(object):
+    """
+    A keyboard keybind instance created when you register a key via /
+    register_key_pressed or register_key_held.
+    """
+    def __init__(self, key, func):
+        """Parameters: (key, func). key is a string. func is a handle to a function."""
+        self.key = key
+        self.func = func
+        self.held = False
+    def __repr__(self):
+        return "<KeyBind({0}) fired by: {1}>".format(self.key, self.func)
             
 
 class Game(object):
@@ -709,8 +762,8 @@ class Game(object):
         # list of "scenes"
         self.scenes = dict()
         # current "scene" to display on screen
-        self.currentScene = None
-        self.CurrentScene = self.currentScene
+        self.current_scene = None
+        self.current_scene = self.current_scene
         # default backgroundColor
         self.backgroundColor = (0, 0, 0)
         # wether or not we should center of our games window
@@ -775,7 +828,7 @@ class Game(object):
         self.key_pressed_binds[keycode] = function
     def register_key_held(self, keycode, function):
         """Register a function handle when the specified key is held."""
-        self.key_held_binds[keycode] = function
+        self.key_held_binds[keycode] = KeyBind(keycode, function)
     def remove_all_key_binds(self):
         """Remove all register key pressed and key held bindings."""
         self.key_pressed_binds = {}
@@ -905,6 +958,9 @@ class Game(object):
                 self.update_scene_objects(keyEvent=True, keyChar=char)
                 self.update_scene_players(keyEvent=True, keyChar=event.key)
                 self.handle_key_pressed_binds(keyEvent=True, keyChar=event.key)
+                self.handle_key_held_binds(keyEvent=True, keyChar=event.key)
+        elif event.type == pygame.KEYUP:
+            self.handle_key_held_released(keyEvent=True, keyChar=event.key)
 
     def handle_key_pressed_binds(self, keyEvent=False, keyChar=None):
         """Handles global key pressed(bind) events."""
@@ -912,6 +968,23 @@ class Game(object):
         lookup = self.key_pressed_binds.get(keyChar)
         if lookup:
             lookup(keyChar)
+
+    def handle_key_held_binds(self, keyEvent=False, keyChar=None):
+        """Handles global key held(bind) events."""
+        keyChar = pygame.key.name(keyChar)
+        lookup = self.key_held_binds.get(keyChar)
+        if lookup:
+            lookup.held = True # Set the KeyBind objects held attribute to True.
+            lookup.func(keyChar, held=lookup.held)
+
+    def handle_key_held_released(self, keyEvent=False, keyChar=None):
+        """Called when a key is released via pygames KEYUP event."""
+        keyChar = pygame.key.name(keyChar)
+        lookup = self.key_held_binds.get(keyChar)
+        if lookup:
+            lookup.held = False # Set the KeyBind objects held attribute to False.
+            lookup.func(keyChar, held=lookup.held)
+
 
     def update_scene_players(self, clickEvent=False, hoverEvent=False, keyEvent=False,
                              keyChar=None):
@@ -930,6 +1003,8 @@ class Game(object):
                              keyChar=None):
         pos = pygame.mouse.get_pos()
         this_scene = self.get_current_scene()
+        if not this_scene:
+            raise ValueError, "You must set the current scene by calling game.current_scene = 'name of scene'!"
         for item in this_scene.objects:
             if not item.hide:
                 if isinstance(item, ui.Overlay):
@@ -1030,17 +1105,17 @@ class Game(object):
                                         obj.text += keyChar
                                 obj.set_text()
     def draw_current_scene(self):
-        value = self.scenes.get(self.currentScene)
+        value = self.scenes.get(self.current_scene)
         value.Draw()
     def get_current_scene(self):
-        return self.scenes.get(self.currentScene)
+        return self.scenes.get(self.current_scene)
     def Update(self):
-        if self.currentScene is not None:
+        if self.current_scene is not None:
             this_scene = self.get_current_scene()
             this_scene.Update()
     def Draw(self):
         self.screen.fill(self.backgroundColor)
-        if self.currentScene is not None:
+        if self.current_scene is not None:
             self.draw_current_scene()
         pygame.display.update()
         self.screen.fill((0, 0, 0))
