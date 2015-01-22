@@ -353,6 +353,12 @@ class DarkSprite(pygame.sprite.Sprite):
                            first.rect.top + second.rect.top,
                            first.rect.width,
                            first.rect.height)
+    def GetSubSprite(self, name):
+        """Returns a handle to the specified DarkSprite instance."""
+        for k in self.subsprites:
+            if k.name == name:
+                return k
+        return None
     def Draw(self, surface=None):
         if surface:
             surface.blit(self.image, self.rect)
@@ -996,7 +1002,8 @@ class Game(object):
                                     obj.text = obj.text[:-1]
                                 else:
                                     # otherwise, populate text entry with new character.
-                                    obj.text += keyChar
+                                    if len(obj.text) < obj.max_length:
+                                        obj.text += keyChar
                                 obj.set_text()
                     
         else:
@@ -1019,7 +1026,8 @@ class Game(object):
                                     obj.text = obj.text[:-1]
                                 else:
                                     # otherwise, populate text entry with new character.
-                                    obj.text += keyChar
+                                    if len(obj.text) < obj.max_length:
+                                        obj.text += keyChar
                                 obj.set_text()
     def draw_current_scene(self):
         value = self.scenes.get(self.currentScene)
