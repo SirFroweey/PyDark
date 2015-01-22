@@ -345,6 +345,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.text_surfaces = {} # dictionary of text surfaces to be drawn ontop of our sprite.
         self.hide = False # determines if we should display(render/draw) this sprite.
         self.rect = None
+        self.scene = None # Contains a handle to the DarkSprites Scene.
     @staticmethod
     def CombineRects(first, second):
         """Combine the X and Y coordinates of two pygame.Rects together. Takes 2 parameters: (first, second). Must be DarkSprite instances."""
@@ -428,7 +429,7 @@ class DarkSprite(pygame.sprite.Sprite):
         if self.surface is not None:
             self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
             self.surface.blit(self.current_image, (0, 0))
-            self.process_subsprites(keyEvent, keyHeldEvent, keyChar)
+            #self.process_subsprites(keyEvent, keyHeldEvent, keyChar)
             # draw text onto sprite.
             for key, value in self.text_surfaces.iteritems():
                 # unpack values from Tuple
@@ -440,10 +441,26 @@ class DarkSprite(pygame.sprite.Sprite):
                     # Call the AddText class-method again to re-render the font surface.
                     self.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
                 self.surface.blit(j, pos)
+            #self.process_subsprites(keyEvent, keyHeldEvent, keyChar)
             self.Step(keyEvent, keyHeldEvent, keyChar)
+    def clear(self, i=None):
+        self.surface.fill(pygame.SRCALPHA)
+        if self.scene:
+            if i is None:
+                self.scene.Draw(item=self)
+            else:
+                self.scene.Draw(item=i)
+        else:
+            global game_instance
+            self.scene = game_instance.get_current_scene()
     def Step(self, keyEvent, keyHeldEvent, keyChar):
         pass
     def process_subsprites(self, keyEvent, keyHeldEvent, keyChar):
+        new_depth = self.depth + 1
+        for k in self.subsprites:
+            k.Update(keyEvent, keyHeldEvent, keyChar)
+            self.scene.Draw(item=k)
+    def process_subsprites2(self, keyEvent, keyHeldEvent, keyChar):
         """Called by parent DarkSprite. Handles drawing subsprites and passing events to them."""
         for k in self.subsprites:
             # draw subsprites.
@@ -576,6 +593,7 @@ class Scene(object):
     def add_object(self, obj):
         """Adds a object to our scene. If an object with the same name exists, it overwrites the old one."""
         found = self.lookup_object(obj)
+        obj.scene = self
         if found:
             self.objects[found] = obj
         else:
@@ -600,8 +618,14 @@ class Scene(object):
                     #self.surface.screen.blit(item.current_image, item.rect)
                     # if sprites self.hide attribute is False.
                     if not item.hide:
+                        # Draw the DarkSprite surface.
                         if item.surface is not None:
                             self.surface.screen.blit(item.surface, item.rect)
+                        # Draw the subsprites surfaces.
+                        for k in item.subsprites:
+                            if k.surface is not None:
+                                k.Update(False, False, None)
+                                self.surface.screen.blit(k.surface, k.rect)
                 # Handle drawing UI overlay
                 elif isinstance(item, ui.Overlay):
                     pos = item.position
@@ -618,10 +642,17 @@ class Scene(object):
                 self.surface.screen.blit(item.tmxhandler.image, pos)
             # Handle drawing players
             elif isinstance(item, Player):
-                pass
+                self.surface.screen.blit(item.GetCurrentImage(), item.GetPosition())
             # Handle drawing sprites
             elif isinstance(item, DarkSprite):
-                pass
+                if not item.hide:
+                    if item.surface is not None:
+                        self.surface.screen.blit(item.surface, item.rect)
+                        # Draw the subsprites surfaces.
+                for k in item.subsprites:
+                    if k.surface is not None:
+                        k.Update(False, False, None)
+                        self.surface.screen.blit(k.surface, k.rect)
             # Handle drawing UI Overlay
             elif isinstance(item, ui.Overlay):
                 item.Draw()
@@ -653,6 +684,7 @@ class Game(object):
         self.elapsed = 0
         self.receive_input_for = None # defines which DarkSprite to receive input for.
         self.receive_input_for_keybind = None # defines which key stops(submits) receiving text input.
+        self.receive_input_for_func = None # defines which function to call when the keybind above is pressed.
         # Dictionary containing keybinds and functions to invoke when pressed.
         self.key_pressed_binds = {}
         self.key_held_binds = {}
@@ -672,6 +704,7 @@ class Game(object):
         self.scenes = dict()
         # current "scene" to display on screen
         self.currentScene = None
+        self.CurrentScene = self.currentScene
         # default backgroundColor
         self.backgroundColor = (0, 0, 0)
         # wether or not we should center of our games window
@@ -686,6 +719,7 @@ class Game(object):
         self.protocol = protocol
         self.log_or_not = log_or_not
         self.connection = None
+        self.network = None
         if online:
             if server_ip and server_port:
                 self.create_online_connection()
@@ -695,12 +729,13 @@ class Game(object):
                 raise ValueError, "You must pass a PyDark.net.ClientProtocol!"
         # start pygame display
         self.initialize()
-    def receive_user_input(self, darksprite, keystroke="return"):
+    def receive_user_input(self, darksprite, callback, keystroke="return"):
         """Instruct PyDark to transfer all keystrokes onto the target DarkSprites surface using the DarkSprites text_location."""
         if isinstance(darksprite, DarkSprite):
             if darksprite.text_location is not None:
                 self.receive_input_for = darksprite
                 self.receive_input_for_keybind = keystroke
+                self.receive_input_for_func = callback
             else:
                 raise ValueError, "You must set the DarkSprites text_location attribute!"
         else:
@@ -709,6 +744,7 @@ class Game(object):
         """Stop receiving user input from all DarkSprites."""
         self.receive_input_for = None
         self.receive_input_for_keybind = None
+        self.receive_input_for_func = None
     def delete_object(self, instance):
         # removes an object completely from the game.
         found = False
@@ -780,6 +816,7 @@ class Game(object):
             self.connection = net.TCP_Client(parent=self, ip=self.server_ip, port=self.server_port,
                                              protocol=self.protocol, log_or_not=self.log_or_not,
                                              tick_function=self.tick, FPS=self.FPS)
+            self.network = self.connection.factory
         except:
             # could not connect to server
             self.connection = None
@@ -848,6 +885,9 @@ class Game(object):
             if self.receive_input_for is not None:
                 # If the key to stop receiving user input has been pressed.
                 if pygame.key.name(event.key) == self.receive_input_for_keybind:
+                  # Execute the binded function.
+                    if self.receive_input_for_func is not None:
+                        self.receive_input_for_func()
                     # Stop receiving user input.
                     self.stop_user_input()
                 # Otherwise 
