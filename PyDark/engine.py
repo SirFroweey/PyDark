@@ -26,8 +26,8 @@ from xml import sax
 # Created RegisterKeyPress() and RegisterMousePress() functions to specify function callbacks when given keys are pressed.
 
 
-screen_hwnd = None
-game_instance = None
+screen_hwnd = None # global handle to our current game instances screen surface.
+game_instance = None # global handle to our current game instance.
 
 
 ##########################################
@@ -39,15 +39,18 @@ game_instance = None
 
 
 def pygame_to_pil_img(pg_surface):
+    """Loads a pygame image into memory and returns a PIL(or Pillow) string of consisting of the image data."""
     imgstr = pygame.image.tostring(pg_surface, 'RGB')
     return Image.fromstring('RGB', pg_surface.get_size(), imgstr)
 
 
 def font(name, size):
+    """Returns a pygame.font.SysFont instance."""
     return pygame.font.SysFont(name, size)
 
 
 def Hexagon(Radius, SCREENX, SCREENY, Side=0):
+    """Used by the DarkSprite create_hexagon class-method."""
     # Moar Crazy Math, returns co-ords for a single side of the Hexagon
     a = int(math.sin(math.radians(30)) * (Radius / math.sin(math.radians(60))))
     x = SCREENX / 2; y = SCREENY / 2; r = Radius
@@ -185,6 +188,7 @@ class Camera(object):
 
 
 class TileSet(object):
+    """Creates a tileset from a pygame.image instance."""
     def __init__(self, file, tile_width, tile_height):
         image = pygame.image.load(file).convert_alpha()
         if not image:
@@ -206,6 +210,7 @@ class TileSet(object):
 
 
 class TMXHandler(sax.ContentHandler):
+    """Handles parsing .tmx file data."""
     def __init__(self):
         self.width = 0
         self.height = 0
@@ -279,6 +284,7 @@ class Map(object):
         
 
 def Color(r, g, b, a):
+    """Returns a pygame.Color instance. This is a RGBA value. This function takes 4 arguments: R, G, B, A. Each being an integer."""
     return pygame.Color(r, g, b, a)
 
 
@@ -287,6 +293,7 @@ def convert_image_to_string(img):
 
 
 def write_hdd(fileName, data):
+    """Write a file to the hard-drive using base64-encoding."""
     f = file(fileName, "w")
     f.write(base64.b64encode(data))
     f.close()
@@ -294,6 +301,7 @@ def write_hdd(fileName, data):
 
 
 def read_hdd(fileName):
+    """Read a file from the hard-drive and decode it from its base64-encoding."""
     f = file(fileName, "r")
     d = base64.b64decode(f.read())
     f.close()
@@ -305,6 +313,7 @@ def get_image_file(img):
 
 
 def seticon(iconname):
+    """Called by Game instance. Manually sets the PyGame windows icon."""
     pygame.display.set_icon(pygame.image.load(iconname))
 
 
@@ -324,7 +333,7 @@ def preload(file_list, alpha=True):
 class DarkSprite(pygame.sprite.Sprite):
     def __init__(self, name, starting_position=None, sprite_list=None,
                  sprite_sheet=None, depth=1):
-        """Base PyDark 2D sprite. Takes 3 arguments: (name, starting_position, sprite_list)"""
+        """Base PyDark 2D sprite. Takes 1 required argument: name. name must be unique! DarkSprites with similar names will be overwritten."""
         pygame.sprite.Sprite.__init__(self)
         self.focused = False # Allows us to test if the ChatBox has been focused(clicked on).
         self.name = name # name of our sprite (for reference)
@@ -367,6 +376,7 @@ class DarkSprite(pygame.sprite.Sprite):
         """Returns a handle to the specified DarkSprite instance."""
         return self.GetSubSprite(self, name)
     def Draw(self, surface=None):
+        """Called by Game instance mainloop."""
         if surface:
             surface.blit(self.image, self.rect)
         else:
@@ -387,6 +397,7 @@ class DarkSprite(pygame.sprite.Sprite):
         """Add a subsprite to this sprite."""
         return self.AddChild(darkspriteinstance)
     def LoadContent(self, filename=None, alpha=True, preloaded_sprite_list=None):
+        """Load an image or sequence of images into the DarkSprite."""
         # if user supplied a list of subsprites for animation.
         if preloaded_sprite_list:
             self.sprite_list = preloaded_sprite_list    
@@ -409,7 +420,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.rect = self.current_image.get_rect()
         return True
     def load_content(self, filename=None, alpha=True, preloaded_sprite_list=None):
-        """Load an image or set of images into the DarkSprite."""
+        """Load an image or sequence of images into the DarkSprite."""
         return self.LoadContent(filename, alpha, preloaded_sprite_list)
     def GetSize(self):
         """Returns the DarkSprites current images size. (width, height)."""
@@ -445,6 +456,7 @@ class DarkSprite(pygame.sprite.Sprite):
         return self.CreateBlock(width, height, color, invisible)
     def CreateHexagon(self, color=(255, 255, 255, 255), size=[52, 52],
                       radius=21, x=42, y=42, rotate=27, invisible=False):
+        """Create(draw) a hexagon surface."""
         point_list = Hexagon(radius, x, y, 0)
         if not invisible:
             self.image = pygame.Surface(size, pygame.SRCALPHA, 32)
@@ -461,6 +473,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
     def create_hexagon(self, color=(255, 255, 255, 255), size=[52, 52],
                       radius=21, x=42, y=42, rotate=27, invisible=False):
+        """Create(draw) a hexagon surface."""
         return self.CreateHexagon(color, size, radius, x, y, rotate, invisible)
     def Update(self, keyEvent=False, keyHeldEvent=False, keyChar=None):
         if self.surface is not None:
@@ -481,6 +494,7 @@ class DarkSprite(pygame.sprite.Sprite):
             #self.process_subsprites(keyEvent, keyHeldEvent, keyChar)
             self.Step(keyEvent, keyHeldEvent, keyChar)
     def clear(self, i=None):
+        """Manually instruct PyDark to clear this DarkSprites surface."""
         self.surface.fill(pygame.SRCALPHA)
         if self.scene:
             if i is None:
@@ -491,34 +505,13 @@ class DarkSprite(pygame.sprite.Sprite):
             global game_instance
             self.scene = game_instance.get_current_scene()
     def Step(self, keyEvent, keyHeldEvent, keyChar):
+        """Called by Game instance at every interval of the main loop. keyEvent and keyHeldEvent are booleans. keyChar is the event.key being pressed or None."""
         pass
-    def process_subsprites(self, keyEvent, keyHeldEvent, keyChar):
-        new_depth = self.depth + 1
-        for k in self.subsprites:
-            k.Update(keyEvent, keyHeldEvent, keyChar)
-            self.scene.Draw(item=k)
-    def process_subsprites2(self, keyEvent, keyHeldEvent, keyChar):
-        """Called by parent DarkSprite. Handles drawing subsprites and passing events to them."""
-        for k in self.subsprites:
-            # draw subsprites.
-            self.surface.blit(k.current_image, k.rect.topleft)
-            for key, value in k.text_surfaces.iteritems():
-                # unpack values from Tuple
-                j, pos, redraw, redraw_function, font_handle, font_color, text = value 
-                # if redraw flag is True, then re-render the font text using the redraw_function.
-                if redraw:
-                    # Call the redraw_function and store its return value as a string.
-                    text = str(redraw_function())
-                    # Call the AddText class-method again to re-render the font surface.
-                    k.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
-                # Calculate this subsprites position by combining its text position /
-                # with the parent DarkSprites position.
-                new_pos = (k.rect.topleft[0] + pos[0], k.rect.topleft[1] + pos[1])
-                self.surface.blit(j, new_pos)
     def OnKey(self, event):
         """Called when game.receive_user_input() is binded to this DarkSprite. Handles keystroke input."""
         pass
     def Collision(self, other):
+        """Parameters: (other). other is a DarkSprite instance. Can be used to test if this DarkSprite collides with another DarkSprite."""
         pass
     def OnClick(self, pos):
         """Called when user clicks on sprite."""
@@ -530,6 +523,7 @@ class DarkSprite(pygame.sprite.Sprite):
         """Returns the DarkSprites current drawn position as a Vector2D object."""
         return vector2d.Vec2d(self.rect.topleft)
     def get_position(self):
+        """Returns the DarkSprites current drawn position as a Vector2D object."""
         return self.GetPosition()
     def SetPosition(self, position=None):
         """Sets the sprites position(if passed), otherwise, it sets the sprite to the aforementioned starting position."""
@@ -553,6 +547,7 @@ class DarkSprite(pygame.sprite.Sprite):
 
 
 class BaseSprite(pygame.sprite.Sprite):
+    """Used by the PyDark.ui module."""
     def __init__(self, name, text=None, position=(0, 0), image_sprites=None):
         pygame.sprite.Sprite.__init__(self)
         self.image_sprite = image_sprites
@@ -596,7 +591,9 @@ class BaseSprite(pygame.sprite.Sprite):
 
 
 class DarkThread(threading.Thread):
+    """A daemon-flagged threading.Thread instance."""
     def __init__(self, name, func, runafter=None, params=[]):
+        """This class requires 2 parameters, and can recieve another 2 optional parameters. (name, func, runafter, params). name is a string and must be unique. func is a function handle and defines which function to execute. runafter is a float that defines when we should run this function. params is a list consisting of optional parameters to pass to our function handle."""
         threading.Thread.__init__(self)
         self.daemon = True
         self.runafter = runafter
@@ -615,6 +612,7 @@ class DarkThread(threading.Thread):
 class Scene(object):
     """A scene is a presentation of objects and UI elements."""
     def __init__(self, surface, name):
+        """This class takes two parameters: (surface, name). surface must be assigned to your game instance. name is a string and must be unique!"""
         # wether or not we should "draw" or "display" this scene
         self.display = True
         # list of objects to draw onto our Scene()
@@ -628,6 +626,7 @@ class Scene(object):
         #
         self.map = None
     def window_size(self):
+        """Returns our game instances window dimensions."""
         return self.surface.screen.get_size()
     def lookup_object(self, obj):
         """Attempts to find the object(obj) within' our self.objects list. Returns the index if found or None."""
@@ -644,9 +643,11 @@ class Scene(object):
         else:
             self.objects.append(obj)
     def add_player(self, player_instance):
+        """Add a engine.Player instance to our Scene."""
         player_instance.SetSurface(self.surface)
         self.players.append(player_instance)
     def remove_object(self, obj):
+        """Remove an object from our scene."""
         self.objects.remove(obj)
     def Draw(self, item=None):
         """Draw all self.objects onto our Scene() view."""
@@ -703,11 +704,23 @@ class Scene(object):
                 item.Draw()
                 pos = item.position
                 self.surface.screen.blit(item.surface, pos)
+    def process_collisions(self, ds):
+        """Process collisions for this DarkSprite."""
+        #other_sprites = [j for j in self.objects if j.__class__.__name__ != ds.__class__.__name__]
+        if isinstance(ds, DarkSprite):
+            other_sprites = [j for j in self.objects if isinstance(j, DarkSprite) and j.name != ds.name]
+            other_sprites = pygame.sprite.Group(other_sprites)
+            hit_list = pygame.sprite.spritecollide(ds, other_sprites, True)
+            for darksprite in hit_list:
+                ds.Collision(darksprite)
     def Update(self, item=None):
         """Update all our self.objects on our Scene() view."""
         if item is None:
             for item in self.objects:
+                # Handle collisions for DarkSprites.
                 item.Update()
+                if self.surface.internal_collision_checking is True:
+                    self.process_collisions(item)
             for player in self.players:
                 player.Update()
         else:
@@ -735,12 +748,14 @@ class KeyBind(object):
 class Game(object):
     def __init__(self, title, window_size, icon=None,
                  center_window=True, FPS=30, online=False,
-                 server_ip=None, server_port=None, protocol=None, log_or_not=False):
+                 server_ip=None, server_port=None, protocol=None,
+                 log_or_not=False, collision_checking=True):
         """parameters: (title, window_size, icon, center_window, FPS, online, server_ip, server_port, protocol, log_or_not)"""
         self.debug = False
         self.clock = pygame.time.Clock()
         self.FPS = FPS
         self.elapsed = 0
+        self.internal_collision_checking = collision_checking
         self.receive_input_for = None # defines which DarkSprite to receive input for.
         self.receive_input_for_keybind = None # defines which key stops(submits) receiving text input.
         self.receive_input_for_func = None # defines which function to call when the keybind above is pressed.
@@ -1123,10 +1138,14 @@ class Game(object):
         pass
     def Unload(self, content):
         pass
+    def Step(self):
+        """Called within' PyGames mainloop. Does nothing by default. Override this function with your own."""
+        pass
     def tick(self):
         for event in pygame.event.get():
             self.processEvent(event)
 
+        self.Step()
         self.Update()
         self.Draw()
         self.elapsed = self.clock.tick(self.FPS)

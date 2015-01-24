@@ -105,7 +105,7 @@ class ClientProtocol(LineReceiver):
     def lineReceived(self, line):
         try:
             # ensure we get a clean packet
-            line = decode_packet(line)
+            line = self.factory.decryption(line)
             header, payload = line.split(":")
         except:
             # if we get a malformed packet, close the connection.
@@ -126,13 +126,14 @@ class ClientProtocol(LineReceiver):
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
                 # execute handle
-                try:
-                    eval(command)
-                except:
-                    print "Error on function {0}: ".format(command) + sys.exc_info()[0]
+                eval(command)
+                #try:
+                    #eval(command)
+                #except:
+                    #print "Error on function {0}: ".format(command) + " " + str(sys.exc_info())
 
     def message(self, line):
-        self.sendLine(encode_packet(line))
+        self.sendLine(self.factory.encryption(line))
 
 
 class ServerProtocol(LineReceiver):
@@ -234,7 +235,7 @@ class ServerProtocol(LineReceiver):
     def lineReceived(self, line):
         try:
             # ensure we get a clean packet
-            line = decode_packet(line)
+            line = self.factory.decryption(line)
             header, payload = line.split(":")
         except:
             # if we get a malformed packet, close the connection.
@@ -257,14 +258,17 @@ class ServerProtocol(LineReceiver):
                 eval(command)
 
     def message(self, line):
-        self.sendLine(encode_packet(line))
+        self.sendLine(self.factory.encryption(line))
 
 
 class PyDarkFactory(protocol.Factory):
     # max_clients = maximum active connections
-    def __init__(self, name, max_clients, protocol):
+    def __init__(self, name, max_clients, protocol, encryption,
+                 decryption):
         self.name = name
         self.activeConnections = 0
+        self.encryption = encryption
+        self.decryption = decryption
         self.max_clients = max_clients
         self.protocol = protocol
         self.clients = {} #hash table. quick look ups.
@@ -276,8 +280,11 @@ class PyDarkFactory(protocol.Factory):
 
 class PyDarkClientFactory(ClientFactory):
 
-    def __init__(self, parent, protocol, log):
+    def __init__(self, parent, protocol, log, encryption,
+                 decryption):
         self.activeConnections = 0
+        self.encryption = encryption
+        self.decryption = decryption
         self.parent = parent
         self.protocol = protocol
         self.clients = {} # hash table. quick look ups.
@@ -299,7 +306,8 @@ class PyDarkClientFactory(ClientFactory):
 
 class TCP_Server(object):
     def __init__(self, name="", ip="127.0.0.1", port=9020, log2file=True, max_clients=100,
-                 protocol=ServerProtocol):
+                 protocol=ServerProtocol, encryption=encode_packet,
+                 decryption=decode_packet):
         self.name = name
         self.port = port
         if log2file:
@@ -307,7 +315,8 @@ class TCP_Server(object):
         else:
             log.startLogging(sys.stdout)
         self.protocol = protocol
-        self.handler = PyDarkFactory(name, max_clients, protocol)
+        self.handler = PyDarkFactory(name, max_clients, protocol,
+                                     encryption, decryption)
         #self.s = endpoints.serverFromString(reactor, "tcp:%s:interface=%s" %(str(port), str(ip))).listen(
         #    self.handler
         #)
@@ -319,14 +328,17 @@ class TCP_Server(object):
 
 
 class TCP_Client(object):
-    def __init__(self, parent, ip, port, protocol=ClientProtocol, log_or_not=False, tick_function=None, FPS=30):
+    def __init__(self, parent, ip, port, protocol=ClientProtocol,
+                 log_or_not=False, tick_function=None, FPS=30,
+                 encryption=encode_packet, decryption=decode_packet):
         if log_or_not:
             log.startLogging(sys.stdout)
         self.parent = parent
         self.protocol = protocol
         self.port = port
         self.ip = ip
-        self.factory = PyDarkClientFactory(self, protocol, log_or_not)
+        self.factory = PyDarkClientFactory(self, protocol, log_or_not,
+                                           encryption, decryption)
         self.tick_function = tick_function
         self.handle = None # handle to our client reactor.
         self.FPS = FPS

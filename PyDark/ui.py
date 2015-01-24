@@ -84,7 +84,7 @@ class TextBox(BaseSprite):
     def __init__(self, name, position, fontName="Tahoma",
                  fontSize=14, fontColor=(255, 255, 255, 0), default_image=None,
                  image_hover=None, image_selected=None,
-                 offset=(15, 28), center=False):
+                 offset=(15, 28), center=False, max_length=20):
        # Call the parent class (Sprite) constructor
        BaseSprite.__init__(self, position)
        self.name = name
@@ -120,6 +120,7 @@ class TextBox(BaseSprite):
        self.rect.topleft = position
        # Store position in global variable
        self.position = position
+       self.max_length = max_length
 
     def change_image(self, image):
         # Every half-a-second w check to see the state of the image.
