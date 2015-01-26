@@ -2,6 +2,7 @@ from itertools import chain
 import datetime
 import constants
 import pygame
+import string
 import time
 import os
 
@@ -89,6 +90,7 @@ class TextBox(BaseSprite):
        BaseSprite.__init__(self, position)
        self.name = name
        self.text = ""
+       self.allowed_keys = string.letters[:52] + string.digits + string.punctuation + " "
        self.center = center
        self.font = pygame.font.SysFont(fontName, fontSize)
        self.fontColor = fontColor
@@ -200,6 +202,9 @@ class Button(BaseSprite):
         self.image_hover = None
         self.image_selected = None
 
+        # last time the button was clicked
+        self.last_click = datetime.datetime.now()
+
         # set default global variable values
         if default_image:
             self.default_image = pygame.image.load(default_image).convert_alpha()
@@ -275,11 +280,14 @@ class Button(BaseSprite):
             # Check for mouse input
             if pygame.mouse.get_pressed() == (1, 0, 0):
                 if self.test_rect.collidepoint(mouse_position):
-                    self.focused = True
-                    self.change_image(image=self.image_selected)
-                    if self.sound: self.sound.play()
-                    time.sleep(0.3)
-                    self.on_press(Event(constants.CLICK_EVENT, self))
+                    comparison = self.last_click  - datetime.datetime.now()
+                    if abs(comparison.total_seconds()) > 0.2:
+                        self.focused = True
+                        self.change_image(image=self.image_selected)
+                        if self.sound: self.sound.play()
+                        time.sleep(0.3)
+                        self.on_press(Event(constants.CLICK_EVENT, self))
+                        self.last_click = datetime.datetime.now()
                 else:
                     self.focused = False
                     self.change_image(image=self.default_image)

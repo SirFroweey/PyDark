@@ -125,12 +125,15 @@ class ClientProtocol(LineReceiver):
             command = self.headers.get(header)
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
-                # execute handle
-                eval(command)
-                #try:
-                    #eval(command)
-                #except:
-                    #print "Error on function {0}: ".format(command) + " " + str(sys.exc_info())
+                try:
+                    # execute handle
+                    eval(command)
+                except:
+                    print "[Error on handle: {0}. Payload: {1}]".format(
+                        header,
+                        payload,
+                    )
+                    print str(sys.exc_info())
 
     def message(self, line):
         self.sendLine(self.factory.encryption(line))
@@ -184,7 +187,7 @@ class ServerProtocol(LineReceiver):
             self.transport.loseConnection()
         else:
             self.factory.clients[client.net.transport] = client
-            log.msg("Updated client hash-table: %s" %self.factory.clients.keys())
+            #log.msg("Updated client hash-table: %s" %self.factory.clients.keys())
             self.factory.activeConnections += 1
 
     def lookupPlayer(self, instance, key_supplied=False):
@@ -197,6 +200,7 @@ class ServerProtocol(LineReceiver):
         return self.factory.clients.get(instance)
 
     def connectionLost(self, reason):
+        self.clientDisconnected()
         client = self.lookupPlayer(self)#self.transport.getPeer()
         if client is not None:
             # Lost connection due to internet problems, random disconnect, etc
@@ -207,6 +211,9 @@ class ServerProtocol(LineReceiver):
             log.msg("Kicked connection from %s due to max_clients QUOTA being reached." %self.transport.getPeer())
         log.msg("Disconnect Reason: %s" %reason)
         self.factory.activeConnections -= 1
+
+    def clientDisconnected(self):
+        pass
 
     def broadcastMessage(self, line, client=None):
         """Broadcast line to all clients or to an individual client."""
@@ -254,8 +261,15 @@ class ServerProtocol(LineReceiver):
             command = self.headers.get(header)
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
-                # execute handle
-                eval(command)
+                try:
+                    # execute handle
+                    eval(command)
+                except:
+                    print "[Error on handle: {0}. Payload: {1}]".format(
+                        header,
+                        payload,
+                    )
+                    print str(sys.exc_info())
 
     def message(self, line):
         self.sendLine(self.factory.encryption(line))

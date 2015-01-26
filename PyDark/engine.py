@@ -294,7 +294,7 @@ def convert_image_to_string(img):
 
 def write_hdd(fileName, data):
     """Write a file to the hard-drive using base64-encoding."""
-    f = file(fileName, "w")
+    f = open(fileName, "w")
     f.write(base64.b64encode(data))
     f.close()
     return True
@@ -302,10 +302,13 @@ def write_hdd(fileName, data):
 
 def read_hdd(fileName):
     """Read a file from the hard-drive and decode it from its base64-encoding."""
-    f = file(fileName, "r")
-    d = base64.b64decode(f.read())
-    f.close()
-    return d
+    try:
+        f = open(fileName, "r")
+        d = base64.b64decode(f.read())
+        f.close()
+        return d
+    except:
+        return None
 
 
 def get_image_file(img):
@@ -355,6 +358,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.hide = False # determines if we should display(render/draw) this sprite.
         self.rect = None
         self.scene = None # Contains a handle to the DarkSprites Scene.
+        self.colliding = False
     @staticmethod
     def CombineRects(first, second):
         """Combine the X and Y coordinates of two pygame.Rects together. Takes 2 parameters: (first, second). Must be DarkSprite instances."""
@@ -711,8 +715,14 @@ class Scene(object):
             other_sprites = [j for j in self.objects if isinstance(j, DarkSprite) and j.name != ds.name]
             other_sprites = pygame.sprite.Group(other_sprites)
             hit_list = pygame.sprite.spritecollide(ds, other_sprites, True)
+            # Call DarkSprite Collision class-methods when a collision is detected.
             for darksprite in hit_list:
                 ds.Collision(darksprite)
+            # Let the DarkSprite know if they are currently colliding with another DarkSprite.
+            if len(hit_list) > 0:
+                ds.colliding = True
+            else:
+                ds.colliding = False
     def Update(self, item=None):
         """Update all our self.objects on our Scene() view."""
         if item is None:
@@ -1117,7 +1127,8 @@ class Game(object):
                                 else:
                                     # otherwise, populate text entry with new character.
                                     if len(obj.text) < obj.max_length:
-                                        obj.text += keyChar
+                                        if keyChar in obj.allowed_keys:
+                                            obj.text += keyChar
                                 obj.set_text()
     def draw_current_scene(self):
         value = self.scenes.get(self.current_scene)
