@@ -80,10 +80,8 @@ class DataQueue(object):
 
 class Player(object):
     """PyDark network and/or local player instance."""
-    def __init__(self, network=None, name=None, xspeed=1, yspeed=1, **kwargs):
+    def __init__(self, network=None, name=None, **kwargs):
         self.kwargs = kwargs
-        self.xspeed = xspeed # player x-coordinate speed(in pixels)
-        self.yspeed = yspeed # player y-coordinate speed(in pixels)
         self.name = name
         self.net = network
         self.key_pressed_dict = {} # dictionary containing keyboard_character, function_handle pairs.
@@ -150,7 +148,7 @@ class Player(object):
             self.sprite.Update()
     def __repr__(self):
         if self.net is not None:
-            return "Player: <%s>" %self.net.transport.getPeer()
+            return "Player(%s): <%s>" %(self.name, self.net.transport.getPeer())
         else:
             return "Player: <%s>" %self.name
 
@@ -925,6 +923,9 @@ class Game(object):
         screen_hwnd = self.screen
         game_instance = self
         #write_hdd("icon.txt", convert_image_to_string(get_image_file("PyDark/preferences_desktop_gaming.png")) )
+    def get_window_size(self):
+        """Returns the resolution(size) of our game window."""
+        return self.screen.get_size()
     def add_scene(self, _scene):
         self.scenes[_scene.name] = _scene
     def start(self):

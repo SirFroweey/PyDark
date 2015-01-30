@@ -12,7 +12,7 @@ import engine
 
 __version__ = 1.0
 
-# client/server packet format
+# default client/server packet format
 # HEADER:PAYLOAD
 
 
@@ -102,11 +102,25 @@ class ClientProtocol(LineReceiver):
     def connectionMade(self):
         self.connected = True
 
+    def packetParser(self, line):
+        """
+        This function is in charge of 'splitting' the packet header from the packet payload.
+        By default, it seperates the header from the payload by splitting the packet data from its colon(:).
+        """
+        header, payload = line.split(":")
+        return header, payload
+
+    def badPacket(self, line):
+        """
+        This function is called when an unrecognized packet is received from the server.
+        """
+        print "Received unrecognized packet from server:", line
+
     def lineReceived(self, line):
         try:
             # ensure we get a clean packet
             line = self.factory.decryption(line)
-            header, payload = line.split(":")
+            header, payload = self.packetParser(line)
         except:
             # if we get a malformed packet, close the connection.
             ####
@@ -115,7 +129,7 @@ class ClientProtocol(LineReceiver):
             ####
             # That way we can detect patterns and determine if the client is a hacker \
             # and is attempting to send edited packet data.
-            print "RECEIVED UNRECOGNIZED PACKET:", line
+            self.badPacket(line)
             header = None
             self.transport.loseConnection()
 
@@ -144,14 +158,13 @@ class ServerProtocol(LineReceiver):
     Base Server protocol.
     Sub-class this to create your protocol.
     """
-    
-    end = "QUIT:NOW"
 
     def __init__(self, factory):
         self.factory = factory
         # list of protocol handles. Expand as necessary. Always pass (payload) as parameter.
         self.headers = {}
         self.iterables = []
+        self.debug_mode = False
         self.timer = task.LoopingCall(self.mainloop)
         self.timer.start(0.1)
 
@@ -177,14 +190,20 @@ class ServerProtocol(LineReceiver):
         func_as_string = string, i.e.: "self.handle_msg(payload)"
         """
         self.headers[headerName] = func_as_string
+
+    def maxClients(self):
+        """
+        Called when the maximum amount of players QUOTA has been reached on the server.
+        By default, this function sends a DISCONNECT packet to the client and calls transport.loseConnection() after.
+        """
+        self.message("DISCONNECT: Too many connections. Please try again later.", self.transport.getPeer())
+        self.transport.loseConnection()        
     
     def connectionMade(self):
         client = engine.Player(network=self) # create a temporary Player() instance.
-        log.msg("Got client connection from %s" % client)
+        #log.msg("Got client connection from %s" % client)
         if len(self.factory.clients) >= self.factory.max_clients:
-            log.msg("Too many connections. Kicking %s off server." %client)
-            self.broadcastMessage("DISCONNECT: Too many connections. Please try again later.", client)
-            self.transport.loseConnection()
+            self.maxClients()
         else:
             self.factory.clients[client.net.transport] = client
             #log.msg("Updated client hash-table: %s" %self.factory.clients.keys())
@@ -204,19 +223,17 @@ class ServerProtocol(LineReceiver):
         client = self.lookupPlayer(self)#self.transport.getPeer()
         if client is not None:
             # Lost connection due to internet problems, random disconnect, etc
-            log.msg("Lost connection from %s" %client)
+            #log.msg("Lost connection from %s" %client)
             self.factory.clients.pop(client.net.transport)
-        else:
-            # Lost connection because we kicked them off due to self.factory.max_clients quota.
-            log.msg("Kicked connection from %s due to max_clients QUOTA being reached." %self.transport.getPeer())
-        log.msg("Disconnect Reason: %s" %reason)
+        #log.msg("Disconnect Reason: %s" %reason)
         self.factory.activeConnections -= 1
 
     def clientDisconnected(self):
+        """Called when a client loses connection to the server."""
         pass
 
     def broadcastMessage(self, line, client=None):
-        """Broadcast line to all clients or to an individual client."""
+        """Broadcast line to all clients or to an individual client(if 'client' is passed as an argument)."""
         if not client:
             for c in list(self.factory.clients.keys()):
                 _player = self.lookupPlayer(c, key_supplied=True)
@@ -224,26 +241,36 @@ class ServerProtocol(LineReceiver):
         else:
             client.net.message(line)
 
-    def updateCoordinates(self):
-        # This function is called periodically by the server.
-        """Update all of our clients with our coordinates."""
-        _player = self.lookupPlayer(self)
-        if _player:
-            _payload = "PLAYER_COORDINATE:%s;%s" %(_player.x, _player.y)
-            self.broadcastMessage(_payload)
-
     def mainloop(self):
         """Functions registered via register_iterable(headerName) will be called here forever."""
         payload = None # prevents "payload" is not defined error.
         for header in self.iterables:
             func = self.headers.get(header)
             eval(func)
+
+    def packetParser(self, line):
+        """
+        This function is in charge of 'splitting' the packet header from the packet payload.
+        By default, it seperates the header from the payload by splitting the packet data from its colon(:).
+        """
+        header, payload = line.split(":")
+        return header, payload
+
+    def badPacket(self, line):
+        """
+        This function is called when an unrecognized packet is received from the server.
+        """
+        print "Received unrecognized packet from server:", line
+
+    def closeConnection(self):
+        """Kicks the current client off the server by closing its connection."""
+        self.transport.loseConnection()
         
     def lineReceived(self, line):
         try:
             # ensure we get a clean packet
             line = self.factory.decryption(line)
-            header, payload = line.split(":")
+            header, payload = self.packetParser(line)
         except:
             # if we get a malformed packet, close the connection.
             ####
@@ -252,6 +279,7 @@ class ServerProtocol(LineReceiver):
             ####
             # That way we can detect patterns and determine if the client is a hacker \
             # and is attempting to send edited packet data.
+            self.badPacket(line)
             header = None
             self.transport.loseConnection()
 
@@ -261,15 +289,18 @@ class ServerProtocol(LineReceiver):
             command = self.headers.get(header)
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
-                try:
-                    # execute handle
+                if self.debug_mode is True:
                     eval(command)
-                except:
-                    print "[Error on handle: {0}. Payload: {1}]".format(
-                        header,
-                        payload,
-                    )
-                    print str(sys.exc_info())
+                else:
+                    try:
+                        # execute handle
+                        eval(command)
+                    except:
+                        print "[Error on handle: {0}. Payload: {1}]".format(
+                            header,
+                            payload,
+                        )
+                        print str(sys.exc_info())
 
     def message(self, line):
         self.sendLine(self.factory.encryption(line))
