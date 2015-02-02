@@ -139,6 +139,7 @@ class ClientProtocol(LineReceiver):
             command = self.headers.get(header)
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
+                eval(command)
                 try:
                     # execute handle
                     eval(command)
@@ -233,6 +234,15 @@ class ServerProtocol(LineReceiver):
         pass
 
     def broadcastMessage(self, line, client=None):
+        """Broadcast line to all clients or to an individual client(if 'client' is passed as an argument)."""
+        if not client:
+            for c in list(self.factory.clients.keys()):
+                _player = self.lookupPlayer(c, key_supplied=True)
+                _player.net.message(line)
+        else:
+            client.net.message(line)
+
+    def broadcast_message(self, line, client=None):
         """Broadcast line to all clients or to an individual client(if 'client' is passed as an argument)."""
         if not client:
             for c in list(self.factory.clients.keys()):
