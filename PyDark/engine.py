@@ -477,6 +477,22 @@ class DarkSprite(pygame.sprite.Sprite):
                       radius=21, x=42, y=42, rotate=27, invisible=False):
         """Create(draw) a hexagon surface."""
         return self.CreateHexagon(color, size, radius, x, y, rotate, invisible)
+    def CreateCircle(self, color=(255, 255, 255, 255), radius=50, invisible=False):
+        """Create(draw) a circle surface."""
+        if not invisible:
+            self.image = pygame.Surface((radius*2, radius*2),pygame.SRCALPHA)
+            pygame.draw.circle(self.image, color, (radius,radius), radius)
+            self.image = self.image.convert_alpha()
+        else:
+            self.image = pygame.Surface([radius*2, radius*2], pygame.SRCALPHA, 32)
+            pygame.draw.circle(self.image, pygame.SRCALPHA, (radius,radius), radius)
+            self.image = self.image.convert_alpha()
+        self.current_image = self.image
+        self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)    
+        self.rect = self.image.get_rect()
+    def create_circle(self, color=(255, 255, 255, 255), radius=50, invisible=False):
+        """Create(draw) a circle surface."""
+        return self.CreateCircle(color, radius, invisible)
     def Update(self, keyEvent=False, keyHeldEvent=False, keyChar=None):
         if self.surface is not None:
             self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
