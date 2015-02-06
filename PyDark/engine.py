@@ -49,6 +49,10 @@ def font(name, size):
     return pygame.font.SysFont(name, size)
 
 
+def rect(x, y, width, height):
+    return pygame.Rect(x, y, width, height)
+
+
 def Hexagon(Radius, SCREENX, SCREENY, Side=0):
     """Used by the DarkSprite create_hexagon class-method."""
     # Moar Crazy Math, returns co-ords for a single side of the Hexagon
@@ -331,6 +335,33 @@ def preload(file_list, alpha=True):
     return payload
 
 
+class ServerSprite(object):
+    """
+    Base PyDark sprite for server-sided games.
+    Allows you to move sprites and check for collision-testing on the server."""
+    def __init__(self, name, position, width, height):
+        self.name = name
+        self.rect = pygame.Rect(position[0], position[1], width, height)
+    def GetPosition(self):
+        """Get the ServerSprites current position."""
+        return self.get_position()
+    def get_position(self):
+        """Get the ServerSprites current position."""
+        return vector2d.Vec2d(self.rect.topleft)
+    def SetPosition(self, pos):
+        """Set the ServerSprites position."""
+        self.set_position(pos)
+    def set_position(self, pos):
+        """Set the ServerSprites position."""
+        self.rect.topleft = (pos[0], pos[1])
+    def GetSize(self):
+        """Returns the ServerSprites current size. (width, height)."""
+        return (self.rect.width, self.rect.height)
+    def get_size(self):
+        """Returns the ServerSprites current size. (width, height)."""
+        return self.GetSize()
+    
+
 class DarkSprite(pygame.sprite.Sprite):
     def __init__(self, name, starting_position=None, sprite_list=None,
                  sprite_sheet=None, depth=1):
@@ -430,6 +461,12 @@ class DarkSprite(pygame.sprite.Sprite):
     def get_size(self):
         """Returns the DarkSprites current images size. (width, height)."""
         return self.GetSize()
+    def color_sprite(self, red, green, blue):
+        """Color a DarkSprite image using the specified R,G,B values."""
+        arr = pygame.surfarray.pixels3d(self.current_image)
+        arr[:,:,0] = red
+        arr[:,:,1] = green
+        arr[:,:,2] = blue
     def AddText(self, fontHandle, fontColor, position, text,
                 name="text1", redraw=False, redraw_function=None):
         textSurface = fontHandle.render(text, True, fontColor)
@@ -477,6 +514,22 @@ class DarkSprite(pygame.sprite.Sprite):
                       radius=21, x=42, y=42, rotate=27, invisible=False):
         """Create(draw) a hexagon surface."""
         return self.CreateHexagon(color, size, radius, x, y, rotate, invisible)
+    def CreateCircle(self, color=(255, 255, 255, 255), radius=50, invisible=False):
+        """Create(draw) a circle surface."""
+        if not invisible:
+            self.image = pygame.Surface((radius*2, radius*2),pygame.SRCALPHA)
+            pygame.draw.circle(self.image, color, (radius,radius), radius)
+            self.image = self.image.convert_alpha()
+        else:
+            self.image = pygame.Surface([radius*2, radius*2], pygame.SRCALPHA, 32)
+            pygame.draw.circle(self.image, pygame.SRCALPHA, (radius,radius), radius)
+            self.image = self.image.convert_alpha()
+        self.current_image = self.image
+        self.surface = pygame.Surface(self.current_image.get_size(), pygame.SRCALPHA, 32)    
+        self.rect = self.image.get_rect()
+    def create_circle(self, color=(255, 255, 255, 255), radius=50, invisible=False):
+        """Create(draw) a circle surface."""
+        return self.CreateCircle(color, radius, invisible)
     def Update(self, keyEvent=False, keyHeldEvent=False, keyChar=None):
         if self.surface is not None:
             self.surface.fill(pygame.SRCALPHA) # refresh(clear) transparent surface of previous drawings(blits).
@@ -649,8 +702,17 @@ class Scene(object):
         player_instance.SetSurface(self.surface)
         self.players.append(player_instance)
     def remove_object(self, obj):
-        """Remove an object from our scene."""
-        self.objects.remove(obj)
+        """
+        Remove an object from our scene.
+        The argument 'obj' can be a string(the name of the object) or /
+        a handle to the instance.
+        """
+        if isinstance(obj, str):
+            for entry in self.objects:
+                if entry.name == obj:
+                    self.objects.remove(entry)
+        else:
+            self.objects.remove(obj)
     def Draw(self, item=None):
         """Draw all self.objects onto our Scene() view."""
         if item is None:
