@@ -75,6 +75,7 @@ class ClientProtocol(LineReceiver):
         self.iterables = []
         self.log = log
         self.connected = False
+        self.debug_mode = False
 
     def get_hash(self):
         value = 0
@@ -139,16 +140,18 @@ class ClientProtocol(LineReceiver):
             command = self.headers.get(header)
             #log.msg("Got Payload: %s" %payload)
             if command is not None:
-                eval(command)
-                try:
-                    # execute handle
+                if self.debug_mode:
                     eval(command)
-                except:
-                    print "[Error on handle: {0}. Payload: {1}]".format(
-                        header,
-                        payload,
-                    )
-                    print str(sys.exc_info())
+                else:
+                    try:
+                        # execute handle
+                        eval(command)
+                    except:
+                        print "[Error on handle: {0}. Payload: {1}]".format(
+                            header,
+                            payload,
+                        )
+                        print str(sys.exc_info())
 
     def message(self, line):
         self.sendLine(self.factory.encryption(line))

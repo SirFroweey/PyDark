@@ -467,6 +467,29 @@ class DarkSprite(pygame.sprite.Sprite):
         arr[:,:,0] = red
         arr[:,:,1] = green
         arr[:,:,2] = blue
+    def ScaleSprite(self, ratio):
+        """Scale the DarkSprite based on the ratio supplied. ratio should be a float."""
+        if not self.surface:
+            raise ValueError, "The DarkSprite does not have a surface! Load something or create something first."
+        size = self.get_size()
+        new_size = (size[0] * ratio, size[1] * ratio)
+        new_size = (int(new_size[0]), int(new_size[1]))
+        self.surface = pygame.transform.scale(self.surface, new_size)
+        self.current_image = pygame.transform.scale(self.current_image, new_size)
+        self.rect = self.current_image.get_rect()
+    def scale_sprite(self, ratio):
+        """Scale the DarkSprite based on the ratio supplied. ratio should be a float."""
+        self.ScaleSprite(ratio)
+    def RotateSprite(self, angle):
+        """Rotate the DarkSprite based on the angle supplied. angle should be an integer."""
+        if not self.surface:
+            raise ValueError, "The DarkSprite does not have a surface! Load something or create something first."
+        self.surface = pygame.transform.rotate(self.surface, angle)
+        self.current_image = pygame.transform.rotate(self.current_image, angle)
+        self.rect = self.current_image.get_rect()
+    def rotate_sprite(self, angle):
+        """Rotate the DarkSprite based on the angle supplied. angle should be an integer."""
+        self.RotateSprite(angle)
     def AddText(self, fontHandle, fontColor, position, text,
                 name="text1", redraw=False, redraw_function=None):
         textSurface = fontHandle.render(text, True, fontColor)
