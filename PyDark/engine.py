@@ -1,5 +1,6 @@
 import logging
 import threading
+import datetime
 import vector2d
 import base64
 import pygame
@@ -388,6 +389,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.rect = None
         self.scene = None # Contains a handle to the DarkSprites Scene.
         self.colliding = False
+        self.animations = []
     @staticmethod
     def CombineRects(first, second):
         """Combine the X and Y coordinates of two pygame.Rects together. Takes 2 parameters: (first, second). Must be DarkSprite instances."""
@@ -569,8 +571,8 @@ class DarkSprite(pygame.sprite.Sprite):
                     # Call the AddText class-method again to re-render the font surface.
                     self.AddText(font_handle, font_color, pos, text, key, redraw, redraw_function)
                 self.surface.blit(j, pos)
-            #self.process_subsprites(keyEvent, keyHeldEvent, keyChar)
             self.Step(keyEvent, keyHeldEvent, keyChar)
+            self.process_animations()
     def clear(self, i=None):
         """Manually instruct PyDark to clear this DarkSprites surface."""
         self.surface.fill(pygame.SRCALPHA)
@@ -622,6 +624,71 @@ class DarkSprite(pygame.sprite.Sprite):
     def change_image(self, index):
         """Change the DarkSprites currently displayed image using an index."""
         return self.ChangeImage(index)
+    def StartAnimation(self, indexes, time, loop=False):
+        """
+        Animate through a portion(or all) of the images using the specified 'time' offset.
+        Parameters: indexes, time, loop.
+        indexes: sub-list(slice).
+        time: seconds between image animations(float).
+        loop: should we loop indefinetly during this animation? (boolean).
+        """
+        self.animations.append(
+            Animation(self, indexes, time, loop)
+        )
+    def start_animation(self, indexes, time, loop=False):
+        """Animate through a portion(or all) of the images using the specified 'time' offset."""
+        self.StartAnimation(indexes, time, loop)
+    def StopAnimation(self):
+        """Stops the current animation(if any)."""
+        for entry in self.animations:
+            if entry.parent == self:
+                self.animations.remove(entry)
+    def stop_animation(self):
+        """Stops the current animation(if any)."""
+        self.StopAnimation()
+    def process_animations(self):
+        """
+        Called by the DarkSprite's Update class-method(function).
+        Used to process all animations belonging to the DarkSprite.
+        """
+        current = datetime.datetime.now()
+        for entry in self.animations:
+            comparison = current - entry.start
+            if comparison > datetime.timedelta(seconds=entry.time):
+                if entry.last == None:
+                    offset = entry.indexes[0]
+                else:
+                    offset = entry.last + 1
+                if offset >= len(self.sprite_list):
+                    if not entry.loop:
+                        self.animations.remove(entry)
+                    else:
+                        entry.last = None
+                else:
+                    self.change_image(offset)
+                    entry.last = offset
+                    entry.start = datetime.datetime.now()
+
+
+class Animation(object):
+    """Temporary object used to store DarkSprite image animations."""
+    def __init__(self, parent, indexes, time_offset, loop):
+        """
+        This object should not be created manually!
+        Instead call: DarkSprite.start_animation(indexes, time, loop)
+        """
+        # handle to the parent DarkSprite instance.
+        self.parent = parent
+        # sub-list(slice) of the DarkSprites self.sprite_list global variable.
+        self.indexes = indexes
+        # time between animations in seconds.
+        self.time = time_offset
+        # boolean specifying whether we should loop this animation indefinetly.
+        self.loop = loop
+        # contains the time the animation was created.
+        self.start = datetime.datetime.now()
+        # last item accessed
+        self.last = None
 
 
 class BaseSprite(pygame.sprite.Sprite):
