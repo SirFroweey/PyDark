@@ -12,9 +12,6 @@ import engine
 
 __version__ = 1.0
 
-# default client/server packet format
-# HEADER:PAYLOAD
-
 
 def ord2base(number, base):
     """
@@ -90,15 +87,15 @@ class ClientProtocol(LineReceiver):
         else:
             raise ValueError, "You must first register the handle {0} via register_handle(headerName), before registering it as an iterable.".format(headerName)
 
-    def register_handle(self, headerName, func_as_string):
+    def register_handle(self, headerName, func):
         """
         Register packet handle for our server.
         
         Parameters:
         headerName = string, i.e.: "MSG"
-        func_as_string = string, i.e.: "self.handle_msg(payload)"
+        func = function handle
         """
-        self.headers[headerName] = func_as_string
+        self.headers[headerName] = func
 
     def connectionMade(self):
         self.connected = True
@@ -124,12 +121,6 @@ class ClientProtocol(LineReceiver):
             header, payload = self.packetParser(line)
         except:
             # if we get a malformed packet, close the connection.
-            ####
-            # We should also store the client ip and port and keep track of how many \
-            # malformed packets we receive from them.
-            ####
-            # That way we can detect patterns and determine if the client is a hacker \
-            # and is attempting to send edited packet data.
             self.badPacket(line)
             header = None
             self.transport.loseConnection()
@@ -138,20 +129,15 @@ class ClientProtocol(LineReceiver):
         if header is not None:
             header = header.lower()
             command = self.headers.get(header)
-            #log.msg("Got Payload: %s" %payload)
             if command is not None:
-                if self.debug_mode:
-                    eval(command)
-                else:
-                    try:
-                        # execute handle
-                        eval(command)
-                    except:
-                        print "[Error on handle: {0}. Payload: {1}]".format(
-                            header,
-                            payload,
-                        )
-                        print str(sys.exc_info())
+                try:
+                    command(payload)
+                except:
+                    print "[Error on handle: {0}. Payload: {1}]".format(
+                        header,
+                        payload,
+                    )
+                    print str(sys.exc_info())
 
     def message(self, line):
         self.sendLine(self.factory.encryption(line))
@@ -185,15 +171,15 @@ class ServerProtocol(LineReceiver):
         else:
             raise ValueError, "You must first register the handle {0} via register_handle(headerName), before registering it as an iterable.".format(headerName)
 
-    def register_handle(self, headerName, func_as_string):
+    def register_handle(self, headerName, func):
         """
         Register packet handle for our server.
         
         Parameters:
         headerName = string, i.e.: "MSG"
-        func_as_string = string, i.e.: "self.handle_msg(payload)"
+        func = function handle
         """
-        self.headers[headerName] = func_as_string
+        self.headers[headerName] = func
 
     def maxClients(self):
         """
@@ -300,20 +286,15 @@ class ServerProtocol(LineReceiver):
         if header is not None:
             header = header.lower()
             command = self.headers.get(header)
-            #log.msg("Got Payload: %s" %payload)
             if command is not None:
-                if self.debug_mode is True:
-                    eval(command)
-                else:
-                    try:
-                        # execute handle
-                        eval(command)
-                    except:
-                        print "[Error on handle: {0}. Payload: {1}]".format(
-                            header,
-                            payload,
-                        )
-                        print str(sys.exc_info())
+                try:
+                    command(payload)
+                except:
+                    print "[Error on handle: {0}. Payload: {1}]".format(
+                        header,
+                        payload,
+                    )
+                    print str(sys.exc_info())
 
     def message(self, line):
         self.sendLine(self.factory.encryption(line))
