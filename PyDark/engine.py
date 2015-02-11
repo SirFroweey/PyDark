@@ -1,5 +1,6 @@
 import logging
 import threading
+import operator
 import datetime
 import vector2d
 import base64
@@ -327,7 +328,7 @@ def preload(file_list, alpha=True):
     """Preload a list of files into memory. This function returns a list of pygame objects."""
     payload = []
     for entry in file_list:
-        # Load images into memory.
+        # load images
         if entry.endswith(".png") or entry.endswith(".jpg") or entry.endswith(".gif"):
             if alpha:
                 payload.append(pygame.image.load(entry).convert_alpha())
@@ -474,11 +475,16 @@ class DarkSprite(pygame.sprite.Sprite):
         if not self.surface:
             raise ValueError, "The DarkSprite does not have a surface! Load something or create something first."
         size = self.get_size()
+        old_position = self.get_position()
         new_size = (size[0] * ratio, size[1] * ratio)
         new_size = (int(new_size[0]), int(new_size[1]))
         self.surface = pygame.transform.scale(self.surface, new_size)
-        self.current_image = pygame.transform.scale(self.current_image, new_size)
+        for j in self.sprite_list:
+            new_j = pygame.transform.scale(j, new_size)
+            self.sprite_list[self.sprite_list.index(j)] = new_j
+        self.current_image = self.sprite_list[self.index]
         self.rect = self.current_image.get_rect()
+        self.set_position(old_position)
     def scale_sprite(self, ratio):
         """Scale the DarkSprite based on the ratio supplied. ratio should be a float."""
         self.ScaleSprite(ratio)
@@ -487,7 +493,10 @@ class DarkSprite(pygame.sprite.Sprite):
         if not self.surface:
             raise ValueError, "The DarkSprite does not have a surface! Load something or create something first."
         self.surface = pygame.transform.rotate(self.surface, angle)
-        self.current_image = pygame.transform.rotate(self.current_image, angle)
+        for j in self.sprite_list:
+            new_j = pygame.transform.rotate(j, angle)
+            self.sprite_list[self.sprite_list.index(j)] = new_j
+        self.current_image = self.sprite_list[self.index]
         self.rect = self.current_image.get_rect()
     def rotate_sprite(self, angle):
         """Rotate the DarkSprite based on the angle supplied. angle should be an integer."""
@@ -611,6 +620,8 @@ class DarkSprite(pygame.sprite.Sprite):
             if position:
                 self.rect.topleft = position
             else:
+                if self.starting_position is None:
+                    self.starting_position = (0, 0)
                 self.rect.topleft = self.starting_position
             return True
         return False
@@ -656,17 +667,19 @@ class DarkSprite(pygame.sprite.Sprite):
             comparison = current - entry.start
             if comparison > datetime.timedelta(seconds=entry.time):
                 if entry.last == None:
-                    offset = entry.indexes[0]
+                    item = entry.indexes[entry.counter]
                 else:
-                    offset = entry.last + 1
-                if offset >= len(self.sprite_list):
+                    entry.counter += 1
+                if entry.counter >= len(entry.indexes):
                     if not entry.loop:
                         self.animations.remove(entry)
                     else:
                         entry.last = None
+                        entry.counter = 0
                 else:
-                    self.change_image(offset)
-                    entry.last = offset
+                    item = entry.indexes[entry.counter]
+                    self.change_image(item)
+                    entry.last = item
                     entry.start = datetime.datetime.now()
 
 
@@ -687,6 +700,8 @@ class Animation(object):
         self.loop = loop
         # contains the time the animation was created.
         self.start = datetime.datetime.now()
+        # current counter
+        self.counter = 0
         # last item accessed
         self.last = None
 
@@ -893,27 +908,28 @@ class Scene(object):
 
 class KeyBind(object):
     """
-    A keyboard keybind instance created when you register a key via /
+    A keyboard keybind instance created when you register keys via /
     register_key_pressed or register_key_held.
     """
-    def __init__(self, key, func):
-        """Parameters: (key, func). key is a string. func is a handle to a function."""
-        self.key = key
+    def __init__(self, keys, func):
+        """Parameters: (keys, func). keys is a string. func is a handle to a function."""
+        self.keys = keys
         self.func = func
         self.held = False
     def __repr__(self):
-        return "<KeyBind({0}) fired by: {1}>".format(self.key, self.func)
+        return "<KeyBind({0}) fired by: {1}>".format(self.keys, self.func)
             
 
 class Game(object):
     def __init__(self, title, window_size, icon=None,
                  center_window=True, FPS=30, online=False,
                  server_ip=None, server_port=None, protocol=None,
-                 log_or_not=False, collision_checking=True):
-        """parameters: (title, window_size, icon, center_window, FPS, online, server_ip, server_port, protocol, log_or_not)"""
+                 log_or_not=False, collision_checking=True, flags=None):
+        """parameters: (title, window_size, icon, center_window, FPS, online, server_ip, server_port, protocol, log_or_not, collison_checking, flags)"""
         self.debug = False
         self.clock = pygame.time.Clock()
         self.FPS = FPS
+        self.flags = flags
         self.elapsed = 0
         self.internal_collision_checking = collision_checking
         self.receive_input_for = None # defines which DarkSprite to receive input for.
@@ -998,12 +1014,12 @@ class Game(object):
                 
         elif isinstance(instance, DarkSprite):
             print "DarkSprite:", instance
-    def register_key_pressed(self, keycode, function):
+    def register_key_pressed(self, keycodes, function):
         """Register a function handle when the specified key is pressed."""
-        self.key_pressed_binds[keycode] = function
-    def register_key_held(self, keycode, function):
+        self.key_pressed_binds[keycodes] = function
+    def register_key_held(self, keycodes, function):
         """Register a function handle when the specified key is held."""
-        self.key_held_binds[keycode] = KeyBind(keycode, function)
+        self.key_held_binds[keycodes] = KeyBind(keycodes, function)
     def remove_all_key_binds(self):
         """Remove all register key pressed and key held bindings."""
         self.key_pressed_binds = {}
@@ -1071,7 +1087,10 @@ class Game(object):
             pygame.display.set_caption(self.title)
         # handle to our screen buffer
         global screen_hwnd, game_instance
-        self.screen = pygame.display.set_mode(self.size, pygame.HWSURFACE)
+        if self.flags:
+            self.screen = pygame.display.set_mode(self.size, self.flags)
+        else:
+            self.screen = pygame.display.set_mode(self.size, pygame.HWSURFACE)
         screen_hwnd = self.screen
         game_instance = self
         #write_hdd("icon.txt", convert_image_to_string(get_image_file("PyDark/preferences_desktop_gaming.png")) )
@@ -1107,17 +1126,18 @@ class Game(object):
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self.update_scene_objects(clickEvent=True)
             self.update_scene_players(clickEvent=True)
+            self.custom_mousedown_handler(event)
         elif event.type == pygame.MOUSEMOTION:
             if self.debug:
                 print "Coordinate:", pygame.mouse.get_pos()
             self.update_scene_objects(hoverEvent=True)
             self.update_scene_players(hoverEvent=True)
+            self.custom_mousemotion_handler(event)
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.constants.K_BACKSPACE:
                 char = pygame.constants.K_BACKSPACE
             else:
                 char = event.unicode
-
             # If there's a DarkSprite that we are receiving text input for:
             if self.receive_input_for is not None:
                 # If the key to stop receiving user input has been pressed.
@@ -1137,8 +1157,26 @@ class Game(object):
                 self.update_scene_players(keyEvent=True, keyChar=event.key)
                 self.handle_key_pressed_binds(keyEvent=True, keyChar=event.key)
                 self.handle_key_held_binds(keyEvent=True, keyChar=event.key)
+                self.custom_keydown_handler(event)
         elif event.type == pygame.KEYUP:
             self.handle_key_held_released(keyEvent=True, keyChar=event.key)
+            self.custom_keyup_handler(event)
+
+    def custom_mousedown_handler(self, event):
+        """Called during pygame.MOUSEBUTTONDOWN events. Does nothing by default. Insert your custom mouse button down handling code here."""
+        pass
+
+    def custom_mousemotion_handler(self, event):
+        """Called during pygame.MOUSEMOTION events. Does nothing by default. Insert your custom mouse motion handling code here."""
+        pass
+
+    def custom_keydown_handler(self, event):
+        """Called during pygame.KEYDOWN events. Does nothing by default. Insert your custom key-handling code here."""
+        pass
+
+    def custom_keyup_handler(self, event):
+        """Called during pygame.KEYUP events. Does nothing by default. Insert your custom key-handling code here."""
+        pass
 
     def handle_key_pressed_binds(self, keyEvent=False, keyChar=None):
         """Handles global key pressed(bind) events."""
