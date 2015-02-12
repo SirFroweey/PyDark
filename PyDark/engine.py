@@ -635,20 +635,21 @@ class DarkSprite(pygame.sprite.Sprite):
     def change_image(self, index):
         """Change the DarkSprites currently displayed image using an index."""
         return self.ChangeImage(index)
-    def StartAnimation(self, indexes, time, loop=False):
+    def StartAnimation(self, indexes, time, loop=False, delta="seconds", func=None):
         """
         Animate through a portion(or all) of the images using the specified 'time' offset.
         Parameters: indexes, time, loop.
         indexes: sub-list(slice).
         time: seconds between image animations(float).
         loop: should we loop indefinetly during this animation? (boolean).
+        delta: string. the datetime.timedelta(delta) comparison. Valid values: hours, minutes, seconds, milliseconds, microseconds.
         """
         self.animations.append(
-            Animation(self, indexes, time, loop)
+            Animation(self, indexes, time, loop, delta, func)
         )
-    def start_animation(self, indexes, time, loop=False):
+    def start_animation(self, indexes, time, loop=False, delta="seconds", func=None):
         """Animate through a portion(or all) of the images using the specified 'time' offset."""
-        self.StartAnimation(indexes, time, loop)
+        self.StartAnimation(indexes, time, loop, delta, func)
     def StopAnimation(self):
         """Stops the current animation(if any)."""
         for entry in self.animations:
@@ -665,7 +666,17 @@ class DarkSprite(pygame.sprite.Sprite):
         current = datetime.datetime.now()
         for entry in self.animations:
             comparison = current - entry.start
-            if comparison > datetime.timedelta(seconds=entry.time):
+            if entry.delta == "seconds":
+                delta = datetime.timedelta(seconds=entry.time)
+            elif entry.delta == "milliseconds":
+                delta = datetime.timedelta(milliseconds=entry.time)
+            elif entry.delta == "microseconds":
+                delta = datetime.timedelta(microseconds=entry.time)
+            elif entry.delta == "minutes":
+                delta = datetime.timedelta(minutes=entry.time)
+            elif entry.delta == "hours":
+                delta = datetime.timedelta(hours=entry.time)
+            if comparison > delta:
                 if entry.last == None:
                     item = entry.indexes[entry.counter]
                 else:
@@ -673,6 +684,8 @@ class DarkSprite(pygame.sprite.Sprite):
                 if entry.counter >= len(entry.indexes):
                     if not entry.loop:
                         self.animations.remove(entry)
+                        if entry.func:
+                            entry.func()
                     else:
                         entry.last = None
                         entry.counter = 0
@@ -685,7 +698,7 @@ class DarkSprite(pygame.sprite.Sprite):
 
 class Animation(object):
     """Temporary object used to store DarkSprite image animations."""
-    def __init__(self, parent, indexes, time_offset, loop):
+    def __init__(self, parent, indexes, time_offset, loop, delta, func):
         """
         This object should not be created manually!
         Instead call: DarkSprite.start_animation(indexes, time, loop)
@@ -698,6 +711,10 @@ class Animation(object):
         self.time = time_offset
         # boolean specifying whether we should loop this animation indefinetly.
         self.loop = loop
+        # datetime.timedelta comparison value type
+        self.delta = delta
+        # function to call when animation completes(if any)
+        self.func = func
         # contains the time the animation was created.
         self.start = datetime.datetime.now()
         # current counter
@@ -1162,6 +1179,10 @@ class Game(object):
             self.handle_key_held_released(keyEvent=True, keyChar=event.key)
             self.custom_keyup_handler(event)
 
+    def custom_event_handler(self, event):
+        """Called during the pygame event for loop. Does nothing by default."""
+        pass
+
     def custom_mousedown_handler(self, event):
         """Called during pygame.MOUSEBUTTONDOWN events. Does nothing by default. Insert your custom mouse button down handling code here."""
         pass
@@ -1346,6 +1367,7 @@ class Game(object):
     def tick(self):
         for event in pygame.event.get():
             self.processEvent(event)
+            self.custom_event_handler(event)
 
         self.Step()
         self.Update()

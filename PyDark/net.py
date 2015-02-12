@@ -1,4 +1,4 @@
-from twisted.internet.protocol import ClientFactory
+from twisted.internet.protocol import ClientFactory, DatagramProtocol
 from twisted.internet import protocol, reactor, endpoints
 #from twisted.application import service, internet
 from twisted.protocols.basic import LineReceiver
@@ -10,7 +10,7 @@ import sys
 import engine
 
 
-__version__ = 1.0
+__version__ = 2.0
 
 
 def ord2base(number, base):
@@ -63,8 +63,6 @@ class ClientProtocol(LineReceiver):
     Base Client protocol.
     Sub-class this to create your protocol.
     """
-
-    end = "END:SESSION"
     
     def __init__(self, factory, log):
         self.factory = factory
@@ -155,8 +153,6 @@ class ServerProtocol(LineReceiver):
         self.headers = {}
         self.iterables = []
         self.debug_mode = False
-        self.timer = task.LoopingCall(self.mainloop)
-        self.timer.start(0.1)
 
     def get_hash(self):
         value = 0
@@ -165,11 +161,26 @@ class ServerProtocol(LineReceiver):
             value += j
         return value
 
-    def register_iterable(self, headerName):
-        if self.headers.get(headerName):
-            self.iterables.append(headerName)
-        else:
-            raise ValueError, "You must first register the handle {0} via register_handle(headerName), before registering it as an iterable.".format(headerName)
+    def register_iterable(self, func):
+        """
+        Register a function(class-method) that will run indefinetly on the server.
+        """
+        self.iterables.append(func)
+
+    def remove_iterable(self, func):
+        """
+        Remove a registered function(class-method) that is running indefinetly on the server.
+        """
+        try:
+            self.iterables.remove(func)
+        except ValueError:
+            pass
+
+    def remove_iterables(self):
+        """
+        Remove all registered functions(class-method) that are running indefinetly on the server.
+        """
+        self.iterables = []
 
     def register_handle(self, headerName, func):
         """
@@ -240,13 +251,6 @@ class ServerProtocol(LineReceiver):
         else:
             client.net.message(line)
 
-    def mainloop(self):
-        """Functions registered via register_iterable(headerName) will be called here forever."""
-        payload = None # prevents "payload" is not defined error.
-        for header in self.iterables:
-            func = self.headers.get(header)
-            eval(func)
-
     def packetParser(self, line):
         """
         This function is in charge of 'splitting' the packet header from the packet payload.
@@ -300,14 +304,150 @@ class ServerProtocol(LineReceiver):
         self.sendLine(self.factory.encryption(line))
 
 
+class ServerUDPProtocol(DatagramProtocol):
+    """Base UDP ServerProtocol class."""
+
+    def __init__(self, factory):
+        self.factory = factory
+        # list of protocol handles. Expand as necessary. Always pass (payload) as parameter.
+        self.headers = {}
+        self.iterables = []
+        self.debug_mode = False
+
+    def get_hash(self):
+        value = 0
+        keys = [int("0x" + j.encode('hex'), 16) for j in self.headers.keys()]
+        for j in keys:
+            value += j
+        return value
+
+    def lookupPlayer(self, instance, key_supplied=False):
+        """Looks for the Player() instance on our self.factory.clients list."""
+        # if we did NOT pass the dictionary key as instance.
+        if not key_supplied:
+            # get the client via its key(transport)
+            return self.factory.clients.get(instance.transport)
+        # otherwise, get the client via its supplied key(transport)
+        return self.factory.clients.get(instance)
+
+    def register_iterable(self, func):
+        """
+        Register a function(class-method) that will run indefinetly on the server.
+        """
+        self.iterables.append(func)
+
+    def remove_iterable(self, func):
+        """
+        Remove a registered function(class-method) that is running indefinetly on the server.
+        """
+        try:
+            self.iterables.remove(func)
+        except ValueError:
+            pass
+
+    def remove_iterables(self):
+        """
+        Remove all registered functions(class-method) that are running indefinetly on the server.
+        """
+        self.iterables = []
+
+    def register_handle(self, headerName, func):
+        """
+        Register packet handle for our server.
+        
+        Parameters:
+        headerName = string, i.e.: "MSG"
+        func = function handle
+        """
+        self.headers[headerName] = func
+
+    def broadcastMessage(self, line, client=None):
+        """Broadcast line to all clients or to an individual client(if 'client' is passed as an argument)."""
+        if not client:
+            for c in list(self.factory.clients.keys()):
+                _player = self.lookupPlayer(c, key_supplied=True)
+                _player.net.message(line)
+        else:
+            client.net.message(line)
+
+    def broadcast_message(self, line, client=None):
+        """Broadcast line to all clients or to an individual client(if 'client' is passed as an argument)."""
+        if not client:
+            for c in list(self.factory.clients.keys()):
+                _player = self.lookupPlayer(c, key_supplied=True)
+                _player.net.message(line)
+        else:
+            client.net.message(line)
+    
+    def maxClients(self):
+        """
+        Called when the maximum amount of players QUOTA has been reached on the server.
+        """
+        self.transport.loseConnection()
+        
+    def packetParser(self, line):
+        """
+        This function is in charge of 'splitting' the packet header from the packet payload.
+        By default, it seperates the header from the payload by splitting the packet data from its colon(:).
+        """
+        header, payload = line.split(":")
+        return header, payload
+
+    def badPacket(self, line):
+        """
+        This function is called when an unrecognized packet is received from the server.
+        """
+        print "Received unrecognized packet from server:", line
+
+    def closeConnection(self):
+        """Kicks the current client off the server by closing its connection."""
+        self.transport.loseConnection()
+        
+    def datagramReceived(self, line, address):
+        if len(self.factory.clients) >= self.factory.max_clients:
+            self.maxClients()
+        else:
+            if not self.factory.clients.get(address):
+                client = engine.Player(network=self)
+                self.factory.clients[client.net.transport] = client
+                self.factory.activeConnections += 1
+        
+        try:
+            line = self.factory.decryption(line)
+            header, payload = self.packetParser(line)
+        except:
+            # if we get a malformed packet, close the connection.
+            self.badPacket(line)
+            header = None
+            self.transport.loseConnection()
+
+        # ensure we have a handle to this header.
+        if header is not None:
+            header = header.lower()
+            command = self.headers.get(header)
+            if command is not None:
+                try:
+                    command(payload)
+                except:
+                    print "[Error on handle: {0}. Payload: {1}]".format(
+                        header,
+                        payload,
+                    )
+                    print str(sys.exc_info())
+                    
+    def message(self, line):
+        self.transport.write(line)
+        
+
 class PyDarkFactory(protocol.Factory):
     # max_clients = maximum active connections
-    def __init__(self, name, max_clients, protocol, encryption,
+    def __init__(self, parent, name, max_clients, protocol, encryption,
                  decryption):
         self.name = name
         self.activeConnections = 0
         self.encryption = encryption
         self.decryption = decryption
+        self.parent = parent
         self.max_clients = max_clients
         self.protocol = protocol
         self.clients = {} #hash table. quick look ups.
@@ -340,13 +480,14 @@ class PyDarkClientFactory(ClientFactory):
 
     def clientConnectionLost(self, connector, reason):
         log.msg('connection lost: ' + reason.getErrorMessage())
-        reactor.stop()    
+        reactor.stop()
 
 
-class TCP_Server(object):
+class UDP_Server(object):
     def __init__(self, name="", ip="127.0.0.1", port=9020, log2file=True, max_clients=100,
                  protocol=ServerProtocol, encryption=encode_packet,
-                 decryption=decode_packet):
+                 decryption=decode_packet, FPS=30):
+        self.FPS = FPS
         self.name = name
         self.port = port
         if log2file:
@@ -354,7 +495,28 @@ class TCP_Server(object):
         else:
             log.startLogging(sys.stdout)
         self.protocol = protocol
-        self.handler = PyDarkFactory(name, max_clients, protocol,
+        self.handler = PyDarkFactory(self, name, max_clients, protocol,
+                                     encryption, decryption)
+        reactor.listenUDP(port, self.handler, interface=ip)
+    def start(self):
+        reactor.run()
+    def __repr__(self):
+        return "Server: {0} on port {1}".format(self.name, self.port)
+
+
+class TCP_Server(object):
+    def __init__(self, name="", ip="127.0.0.1", port=9020, log2file=True, max_clients=100,
+                 protocol=ServerProtocol, encryption=encode_packet,
+                 decryption=decode_packet, FPS=30):
+        self.FPS = FPS
+        self.name = name
+        self.port = port
+        if log2file:
+            log.startLogging(open('server_log.txt', 'w'))
+        else:
+            log.startLogging(sys.stdout)
+        self.protocol = protocol
+        self.handler = PyDarkFactory(self, name, max_clients, protocol,
                                      encryption, decryption)
         #self.s = endpoints.serverFromString(reactor, "tcp:%s:interface=%s" %(str(port), str(ip))).listen(
         #    self.handler
