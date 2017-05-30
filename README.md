@@ -3,7 +3,7 @@ PyDark
 
 PyDark is a 2D and Online Multiplayer video game engine written on-top of Python and PyGame. 
 
-**Prerequisites:** Python 2.7+, PyGame, Twisted
+**Prerequisites:** Python 2.7.x, PyGame, Twisted
 
 
 Overview
