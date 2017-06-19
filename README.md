@@ -201,7 +201,7 @@ class OurProtocol(PyDark.net.ServerProtocol):
 ```
 *(Server protocol example)*
 
-Note it is possible to use PyDark.net networking code can be used outside a PyDark.engine.Game() instance. Take a look at the client.py and server.py examples on how to acheive that.
+**Note:** it is possible to use PyDark.net networking code outside an PyDark.engine.Game() instance. Take a look at the client.py and server.py examples on how to acheive that.
 
 **Real PyDark implementation**
 > The best and easiest way to create a networked game in PyDark is to create two (or more) files named client.py and server.py. Your client code should store your PyDark game logic (Sprites, Tilsheets, Scenes, Mainloop, etc). While the server.py file should only store PyDark.net server networking logic.
