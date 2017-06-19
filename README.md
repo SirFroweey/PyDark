@@ -145,8 +145,8 @@ game.start()
 `game.currentScene = "login_scene"`
 > Defines the current scene to display on our game.
 
-`game.start`
-> Main game loop.
+`game.start()`
+> Start main game loop.
 
 Networking
 ==========
