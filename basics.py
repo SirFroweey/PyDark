@@ -3,6 +3,14 @@ import PyDark.ui
 import PyDark.vector2d
 
 
+class MyProtocol(PyDark.net.ClientProtocol):
+    def __init__(self, factory):
+        PyDark.net.ClientProtocol.__init__(self, factory)
+        self.register_handle("msg", self.chat_message)
+    def chat_message(self, payload):
+        print "Payload:", payload
+
+
 def login_button_pressed(event, game_instance):
     game_instance.currentScene = "game_scene"
     print event, event.fired_by
@@ -17,19 +25,20 @@ game = PyDark.engine.Game(
     FPS=30,
     online=True,
     server_ip="localhost",
-    server_port=8000
+    server_port=8000,
+    protocol=MyProtocol
 )
 
 login_scene = PyDark.engine.Scene(surface=game, name="login_scene")
 game_scene = PyDark.engine.Scene(surface=game, name="game_scene")
 
 login_overlay = PyDark.ui.Overlay(
+    name="login_overlay",
     parent=login_scene,
     size=(login_scene.window_size()[0], 330),
     image="login_overlay_bg.jpg",
     position=(0,0),
 )
-
 
 login_header = PyDark.ui.Label(
     name="login_header",

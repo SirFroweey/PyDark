@@ -202,7 +202,7 @@ class ServerProtocol(LineReceiver):
     
     def connectionMade(self):
         client = engine.Player(network=self) # create a temporary Player() instance.
-        #log.msg("Got client connection from %s" % client)
+        self.clientConnected(client or self.transport.getPeer())
         if len(self.factory.clients) >= self.factory.max_clients:
             self.maxClients()
         else:
@@ -220,17 +220,27 @@ class ServerProtocol(LineReceiver):
         return self.factory.clients.get(instance)
 
     def connectionLost(self, reason):
-        self.clientDisconnected()
-        client = self.lookupPlayer(self)#self.transport.getPeer()
+        client = self.lookupPlayer(self)
+        self.clientDisconnected(client or self.transport.getPeer())
         if client is not None:
             # Lost connection due to internet problems, random disconnect, etc
             #log.msg("Lost connection from %s" %client)
             self.factory.clients.pop(client.net.transport)
         #log.msg("Disconnect Reason: %s" %reason)
         self.factory.activeConnections -= 1
+        
+    def clientConnected(self, player_or_peer):
+		"""
+		Called when a client connects to server.
+		:player_or_peer: PyDark.engine.Player() instance or self.transport.getPeer() instance.
+		"""
+		pass
 
-    def clientDisconnected(self):
-        """Called when a client loses connection to the server."""
+    def clientDisconnected(self, player_or_peer):
+        """
+        Called when a client loses connection to the server.
+        :player_or_peer: PyDark.engine.Player() instance or self.transport.getPeer() instance.
+        """
         pass
 
     def broadcastMessage(self, line, client=None):
@@ -545,10 +555,7 @@ class TCP_Client(object):
         self.FPS = FPS
     def connect(self):
         self.handle = reactor.connectTCP(self.ip, self.port, self.factory)
-        tick = LoopingCall(self.tick_function)
-        tick.start(1.0 / self.FPS)
+        if self.tick_function:
+			tick = LoopingCall(self.tick_function)
+			tick.start(1.0 / self.FPS)
         reactor.run()
-
-
-
-        
