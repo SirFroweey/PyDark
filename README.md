@@ -147,3 +147,86 @@ game.start()
 
 `game.start`
 > Main game loop.
+
+Networking
+==========
+Networking in PyDark is event-based and is built to keep things simple for client/server communication. One way PyDark acheives this is by supplying functions to modify python dictionaries that contain the make-up of your networking logic.
+
+An example of this is via PyDark.net.ServerProtocol.headers and PyDark.net.ClientProtocol.headers. These instance variables are python dictionaries that will contain (key, value) pairs consisting of (header, callback).
+
+**header**
+> unique (string) that defines this networking packet (data) type. An example is 'msg' and 'login'. These of course are arbitrary, you can name your headers whatever you want. 
+
+**callback**
+> class-method (function) callback to trigger when we receive a packet with this header.
+
+In PyDark we call these things handles. So to register a new handle in your protocol, do something like:
+
+```
+import PyDark.net
+
+class MyProtocol(PyDark.net.ClientProtocol):
+    def __init__(self, factory, log):
+        PyDark.net.ClientProtocol.__init__(self, factory, log)
+        self.register_handle("msg", self.chat_message)
+    def chat_message(self, payload):
+        print "Payload:", payload
+        self.message("msg:Thanks for the welcome message!")
+
+```
+*(Client protocol example)*
+
+Notice the line: `self.register_handle("msg", self.chat_message)`.
+This line tells PyDark.net that we want to call the chat_message class-method after receiving a 'msg' packet from the server.
+In the back-end PyDark.net processes all communication between the server and client by calling packet.split(":"). 
+This will split the packet with two values (header, data). Thus your packets should be in the format of "header:data".
+You can send this packet via your ClientProtocol or ServerProtocol by calling `self.message("msg:your message here")`. 
+**Note:** Ensure colons(:) are filtered out to prevent the PyDark.net code from generating an IndexError.
+
+
+```
+import PyDark.net
+
+class OurProtocol(PyDark.net.ServerProtocol):
+    def __init__(self, factory):
+        PyDark.net.ServerProtocol.__init__(self, factory)
+        self.register_handle("msg", self.chat_message)
+        
+    def chat_message(self, payload):
+        print "Payload:", payload
+        
+    def clientConnected(self, player_or_peer):
+		print "{player_or_peer} has connected!".format(player_or_peer=player_or_peer)
+		self.message("msg:hello, world!")
+```
+*(Server protocol example)*
+
+Note it is possible to use PyDark.net networking code can be used outside a PyDark.engine.Game() instance. Take a look at the client.py and server.py examples on how to acheive that.
+
+**Real PyDark implementation**
+> The best and easiest way to create a networked game in PyDark is to create two (or more) files named client.py and server.py. Your client code should store your PyDark game logic (Sprites, Tilsheets, Scenes, Mainloop, etc). While the server.py file should only store PyDark.net server networking logic.
+
+With this in mind, the way you specify your game is an online game is via the following example:
+
+```
+game = PyDark.engine.Game(
+    title="FrowCraft",
+    window_size=(800, 650),
+    center_window=True,
+    FPS=30,
+    online=True,
+    server_ip="localhost",
+    server_port=8000,
+    protocol=OurProtocol
+)
+```
+Pay close attention to the `online=True`, `server_ip="localhost"`, `server_port=8000`, and `protocol=MyProtocol` keyword arguments.
+These inform PyDark that our game instance is an online game instance and we specify which IP and PORT to connect to. Finally,
+we specify our PyDark.net.ClientProtocol instance as the games networking protocol.
+
+In the back-end, PyDark will attempt to connect to the server. If a connection is successful, the instance variable `game.connection` will return a PyDark.net.TCP_Client instance and the instance variable `game.network` will return a PyDark.net.*Factory instance. Otherwise, both varaibles will be None.
+
+
+
+
+
