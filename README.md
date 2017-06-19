@@ -24,20 +24,19 @@ In a nutshell, you have a collection of modules avaialble to you, them being:
 Examples
 ========
 **Main menu**
-> A simple example showcasing PyDarks UI module that displays a main menu scene. Keep in mind you'll be needing to manually provide the following files: (input.png, input_selected.png, click.wav, button.png, button_hover.png).
+> A simple example showcasing PyDarks UI module that displays a main menu scene. Keep in mind you'll be needing to manually provide the following files: (login_overlay_bg.jpg, input.png, input_selected.png, click.wav, button.png, button_hover.png).
 ```
 import PyDark.engine
 import PyDark.ui
 import PyDark.vector2d
 
 
-def login_button_pressed(event):
-    global game
-    game.currentScene = "game_scene"
+def login_button_pressed(event, game_instance):
+    game_instance.currentScene = "game_scene"
     print event, event.fired_by
     print username.text
     print password.text
-    
+
 
 game = PyDark.engine.Game(
     title="FrowCraft",
@@ -110,7 +109,7 @@ password = PyDark.ui.TextBox(
 login_button = PyDark.ui.Button(
     name="login_button",
     position=(100, 260),
-    on_press=login_button_pressed,
+    on_press=lambda e, game=game:login_button_pressed(e, game),
     center=True,
     sound="click.wav",
     default_image="button.png",
@@ -133,3 +132,18 @@ game.add_scene(game_scene)
 game.currentScene = "login_scene"
 game.start()
 ```
+
+`login_overlay.add_object(OBJECT)`
+> Adds an object to our PyDark.ui.Overlay object. This will draw OBJECT on-top of the overlay object. An overlay defines a section of the screen to draw UI elements on).
+
+`login_scene.add_object(OBJECT)`
+> Adds an object to a scene, the scene being the login_scene. Needed to display an object during a scene. Only required to do so once.
+
+`game.add_scene(SCENE)`
+> Adds a scene to our game instance. Needed to specify which scenes we are going to make available for our game.
+
+`game.currentScene = "login_scene"`
+> Defines the current scene to display on our game.
+
+`game.start`
+> Main game loop.
