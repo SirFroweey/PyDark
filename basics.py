@@ -3,13 +3,12 @@ import PyDark.ui
 import PyDark.vector2d
 
 
-def login_button_pressed(event):
-    global game
-    game.currentScene = "game_scene"
+def login_button_pressed(event, game_instance):
+    game_instance.currentScene = "game_scene"
     print event, event.fired_by
     print username.text
     print password.text
-    
+
 
 game = PyDark.engine.Game(
     title="FrowCraft",
@@ -82,7 +81,7 @@ password = PyDark.ui.TextBox(
 login_button = PyDark.ui.Button(
     name="login_button",
     position=(100, 260),
-    on_press=login_button_pressed,
+    on_press=lambda e, game=game:login_button_pressed(e, game),
     center=True,
     sound="click.wav",
     default_image="button.png",
@@ -104,5 +103,3 @@ game.add_scene(game_scene)
 
 game.currentScene = "login_scene"
 game.start()
-
-

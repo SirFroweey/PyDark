@@ -9,7 +9,7 @@ MAX_CLIENTS = 1000
 class OurProtocol(PyDark.net.ServerProtocol):
     def __init__(self, factory):
         PyDark.net.ServerProtocol.__init__(self, factory)
-        self.register_handle("msg", "self.chat_message(payload)")
+        self.register_handle("msg", self.chat_message)
     def chat_message(self, payload):
         print "Payload:", payload
 
