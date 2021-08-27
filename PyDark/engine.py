@@ -176,7 +176,7 @@ class World(object):
 
 
 class Camera(object):
-    """Object that controlls which part of the map to render /
+    """Object that controls which part of the map to render /
        along with all other objects, including Player() instances."""
     def __init__(self, x, y, width=800, height=600):
         self.x = x
@@ -376,7 +376,7 @@ class DarkSprite(pygame.sprite.Sprite):
         self.subsprites = [] # Subsprites for this DarkSprite instance.
         self.parent_sprite = None # Parent DarkSprite of this DarkSprite (if any)
         self.sprite_list = None
-        self.text_location = None # Defines where to draw inputed text(if any)
+        self.text_location = None # Defines where to draw inputted text(if any)
         if sprite_list:
             self.sprite_list = sprite_list
         elif sprite_sheet:
@@ -641,7 +641,7 @@ class DarkSprite(pygame.sprite.Sprite):
         Parameters: indexes, time, loop.
         indexes: sub-list(slice).
         time: seconds between image animations(float).
-        loop: should we loop indefinetly during this animation? (boolean).
+        loop: should we loop indefinitely during this animation? (boolean).
         delta: string. the datetime.timedelta(delta) comparison. Valid values: hours, minutes, seconds, milliseconds, microseconds.
         """
         self.animations.append(
@@ -709,7 +709,7 @@ class Animation(object):
         self.indexes = indexes
         # time between animations in seconds.
         self.time = time_offset
-        # boolean specifying whether we should loop this animation indefinetly.
+        # boolean specifying whether we should loop this animation indefinitely.
         self.loop = loop
         # datetime.timedelta comparison value type
         self.delta = delta
@@ -770,7 +770,7 @@ class BaseSprite(pygame.sprite.Sprite):
 class DarkThread(threading.Thread):
     """A daemon-flagged threading.Thread instance."""
     def __init__(self, name, func, runafter=None, params=[]):
-        """This class requires 2 parameters, and can recieve another 2 optional parameters. (name, func, runafter, params). name is a string and must be unique. func is a function handle and defines which function to execute. runafter is a float that defines when we should run this function. params is a list consisting of optional parameters to pass to our function handle."""
+        """This class requires 2 parameters, and can receive another 2 optional parameters. (name, func, runafter, params). name is a string and must be unique. func is a function handle and defines which function to execute. runafter is a float that defines when we should run this function. params is a list consisting of optional parameters to pass to our function handle."""
         threading.Thread.__init__(self)
         self.daemon = True
         self.runafter = runafter
@@ -790,7 +790,7 @@ class Scene(object):
     """A scene is a presentation of objects and UI elements."""
     def __init__(self, surface, name):
         """This class takes two parameters: (surface, name). surface must be assigned to your game instance. name is a string and must be unique!"""
-        # wether or not we should "draw" or "display" this scene
+        # whether or not we should "draw" or "display" this scene
         self.display = True
         # list of objects to draw onto our Scene()
         self.objects = []
@@ -942,7 +942,7 @@ class Game(object):
                  center_window=True, FPS=30, online=False,
                  server_ip=None, server_port=None, protocol=None,
                  log_or_not=False, collision_checking=True, flags=None):
-        """parameters: (title, window_size, icon, center_window, FPS, online, server_ip, server_port, protocol, log_or_not, collison_checking, flags)"""
+        """parameters: (title, window_size, icon, center_window, FPS, online, server_ip, server_port, protocol, log_or_not, collision_checking, flags)"""
         self.debug = False
         self.clock = pygame.time.Clock()
         self.FPS = FPS
@@ -974,7 +974,7 @@ class Game(object):
         self.current_scene = self.current_scene
         # default backgroundColor
         self.backgroundColor = (0, 0, 0)
-        # wether or not we should center of our games window
+        # whether or not we should center of our games window
         if center_window is True:
             ui.center_window()
         # let us know if we connected to the server properly(if applicable)
