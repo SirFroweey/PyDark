@@ -12,7 +12,7 @@ Overview
 ========
 PyDark runs on top of PyDark.engine.Scene objects. A scene is a collection of objects that are displayed within' the scene. Think of it like a movie scene, where a series of scenes define a movie.
 
-In a nutshell, you have a collection of modules avaialble to you, them being:
+In a nutshell, you have a collection of modules available to you, them being:
 1. PyDark.engine (core functionality, i.e.: Scenes, Sprites, etc).
 2. PyDark.ui (base UI elements for your game, integrate them into your games or build entirely new UI elements).
 3. PyDark.net (twisted networking TCP and UDP client/server networking classes)
@@ -150,7 +150,7 @@ game.start()
 
 Networking
 ==========
-Networking in PyDark is event-based and is built to keep things simple for client/server communication. One way PyDark acheives this is by supplying functions to modify python dictionaries that contain the make-up of your networking logic.
+Networking in PyDark is event-based and is built to keep things simple for client/server communication. One way PyDark achieves this is by supplying functions to modify python dictionaries that contain the make-up of your networking logic.
 
 An example of this is via PyDark.net.ServerProtocol.headers and PyDark.net.ClientProtocol.headers. These instance variables are python dictionaries that will contain (key, value) pairs consisting of (header, callback).
 
@@ -201,7 +201,7 @@ class OurProtocol(PyDark.net.ServerProtocol):
 ```
 *(Server protocol example)*
 
-**Note:** it is possible to use PyDark.net networking code outside an PyDark.engine.Game() instance. Take a look at the client.py and server.py examples on how to acheive that.
+**Note:** it is possible to use PyDark.net networking code outside an PyDark.engine.Game() instance. Take a look at the client.py and server.py examples on how to achieve that.
 
 **Real PyDark implementation**
 > The best and easiest way to create a networked game in PyDark is to create two (or more) files named client.py and server.py. Your client code should store your PyDark game and client networking logic (PyDark.net.ClientProtocol sub-class, Sprites, Tilsheets, Scenes, Mainloop, etc). While the server.py file should only store PyDark.net server networking logic.
@@ -224,7 +224,7 @@ Pay close attention to the `online=True`, `server_ip="localhost"`, `server_port=
 These inform PyDark that our game instance is an online game instance and we specify which IP and PORT to connect to. Finally,
 we specify our PyDark.net.ClientProtocol instance as the games networking protocol.
 
-In the back-end, PyDark will attempt to connect to the server. If a connection is successful, the instance variable `game.connection` will return a PyDark.net.TCP_Client instance and the instance variable `game.network` will return a PyDark.net.*Factory instance. Otherwise, both varaibles will be None.
+In the back-end, PyDark will attempt to connect to the server. If a connection is successful, the instance variable `game.connection` will return a PyDark.net.TCP_Client instance and the instance variable `game.network` will return a PyDark.net.*Factory instance. Otherwise, both variables will be None.
 
 
 

@@ -34,7 +34,7 @@ def encode_packet(data, numeric_base=4, seperator="5", reverse=True):
     data = string (payload)
     numeric_base = integer (numeric base to convert our character ordinal numbers)
     seperator = string (character or characters to split our encoded packet) [Ensure this character(s) is unique]
-    reverse = boolean (wether we should reverse our encoded packet or not)
+    reverse = boolean (whether we should reverse our encoded packet or not)
     """
     data = str(seperator).join([ord2base(ord(j), numeric_base) for j in data])
     if reverse:
@@ -50,7 +50,7 @@ def decode_packet(data, numeric_base=4, seperator="5", reverse=True):
     data = string (payload)
     numeric_base = integer (numeric base to decode our character ordinal numbers)
     seperator = string (character or characters to split our encoded packet) [Ensure this character(s) is unique]
-    reverse = boolean (wether we should reverse our packet data or not before decoding it)
+    reverse = boolean (whether we should reverse our packet data or not before decoding it)
     """
     if reverse:
         data = data[::-1]
@@ -101,7 +101,7 @@ class ClientProtocol(LineReceiver):
     def packetParser(self, line):
         """
         This function is in charge of 'splitting' the packet header from the packet payload.
-        By default, it seperates the header from the payload by splitting the packet data from its colon(:).
+        By default, it separates the header from the payload by splitting the packet data from its colon(:).
         """
         header, payload = line.split(":")
         return header, payload
@@ -163,13 +163,13 @@ class ServerProtocol(LineReceiver):
 
     def register_iterable(self, func):
         """
-        Register a function(class-method) that will run indefinetly on the server.
+        Register a function(class-method) that will run indefinitely on the server.
         """
         self.iterables.append(func)
 
     def remove_iterable(self, func):
         """
-        Remove a registered function(class-method) that is running indefinetly on the server.
+        Remove a registered function(class-method) that is running indefinitely on the server.
         """
         try:
             self.iterables.remove(func)
@@ -178,7 +178,7 @@ class ServerProtocol(LineReceiver):
 
     def remove_iterables(self):
         """
-        Remove all registered functions(class-method) that are running indefinetly on the server.
+        Remove all registered functions(class-method) that are running indefinitely on the server.
         """
         self.iterables = []
 
@@ -264,7 +264,7 @@ class ServerProtocol(LineReceiver):
     def packetParser(self, line):
         """
         This function is in charge of 'splitting' the packet header from the packet payload.
-        By default, it seperates the header from the payload by splitting the packet data from its colon(:).
+        By default, it separates the header from the payload by splitting the packet data from its colon(:).
         """
         header, payload = line.split(":")
         return header, payload
@@ -342,13 +342,13 @@ class ServerUDPProtocol(DatagramProtocol):
 
     def register_iterable(self, func):
         """
-        Register a function(class-method) that will run indefinetly on the server.
+        Register a function(class-method) that will run indefinitely on the server.
         """
         self.iterables.append(func)
 
     def remove_iterable(self, func):
         """
-        Remove a registered function(class-method) that is running indefinetly on the server.
+        Remove a registered function(class-method) that is running indefinitely on the server.
         """
         try:
             self.iterables.remove(func)
@@ -357,7 +357,7 @@ class ServerUDPProtocol(DatagramProtocol):
 
     def remove_iterables(self):
         """
-        Remove all registered functions(class-method) that are running indefinetly on the server.
+        Remove all registered functions(class-method) that are running indefinitely on the server.
         """
         self.iterables = []
 
@@ -398,7 +398,7 @@ class ServerUDPProtocol(DatagramProtocol):
     def packetParser(self, line):
         """
         This function is in charge of 'splitting' the packet header from the packet payload.
-        By default, it seperates the header from the payload by splitting the packet data from its colon(:).
+        By default, it separates the header from the payload by splitting the packet data from its colon(:).
         """
         header, payload = line.split(":")
         return header, payload
